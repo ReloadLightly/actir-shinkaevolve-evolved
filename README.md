@@ -64,6 +64,34 @@ tests/              # Stage A tests + seeds, M1 harness, configs, offline pipeli
 docs/               # DECISIONS.md, BUDGET.md, RUN_M1_LOCALLY.md, API_KEYS.md, ...
 ```
 
+## Running things
+
+**Everything below is free and offline. Nothing here calls an API.**
+
+```bash
+pytest -q                                                    # 196 tests
+python scripts/offline_evolution.py --generations 300         # the full loop, $0.00
+python analysis/archive_analysis.py                           # figures + report
+python tasks/japan_fp/run_evo.py --config_path configs/pilot.yaml --dry-run
+```
+
+**The one thing that does cost money** lives behind a single GitHub page:
+
+> **https://github.com/ReloadLightly/actir-shinkaevolve-evolved/actions/workflows/m1-calibration.yml**
+
+That page shows only the M1 workflow. The **"Run workflow"** button is on the
+right, above the run list. It drops down four inputs:
+
+| Input | Use |
+|---|---|
+| `run_mode` | `estimate` costs nothing and checks the key. `real_compare` spends. |
+| `portfolios` | `accommodation` = 3 calls ≈ $0.006. `all` = 15 calls ≈ $0.038. |
+| `compare` | `no` = one judge. `yes` = both judges + rank correlation, 5× the cost. |
+| `confirm_spend` | Must be exactly `RUN_M1`, or the run refuses. |
+
+The result table is printed to the run's **Summary** page — no digging through
+logs. Nothing else in the repository can spend money.
+
 ## The M1 calibration test
 
 The next gate. Five portfolios — December 2022 plus four rival schools that
