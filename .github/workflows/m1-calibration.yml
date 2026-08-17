@@ -1,0 +1,106 @@
+name: M1 calibration
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "First run estimate; run real_compare only after estimate passes"
+        required: true
+        default: estimate
+        type: choice
+        options:
+          - estimate
+          - real_compare
+      confirm_spend:
+        description: "For real_compare, type exactly RUN_M1"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m1-calibration
+  cancel-in-progress: false
+
+jobs:
+  m1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      JAPAN_FP_JUDGE_CONFIG: configs/judge.local.yaml
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt openai==3.1.0
+
+      - name: Run API-free tests
+        run: python -m pytest -q
+
+      - name: Prepare armed local configuration
+        run: cp configs/judge.local.yaml.example configs/judge.local.yaml
+
+      - name: Verify secret exists
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "OPENAI_API_KEY repository secret is missing or empty."
+            exit 1
+          fi
+          echo "OPENAI_API_KEY is available to this workflow."
+
+      - name: Estimate M1 cost
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/m1_calibration.py \
+            --estimate \
+            --compare-with gpt-4.1-2025-04-14
+
+      - name: Confirm real-call authorization
+        if: ${{ inputs.run_mode == 'real_compare' }}
+        env:
+          CONFIRM_SPEND: ${{ inputs.confirm_spend }}
+        run: |
+          if [ "$CONFIRM_SPEND" != "RUN_M1" ]; then
+            echo "Refusing real calls: confirmation must be exactly RUN_M1."
+            exit 1
+          fi
+
+      - name: Run real M1 judge comparison
+        if: ${{ inputs.run_mode == 'real_compare' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p runs/m1
+          python scripts/m1_calibration.py \
+            --real \
+            --compare-with gpt-4.1-2025-04-14 \
+            2>&1 | tee runs/m1/console.txt
+
+      - name: Preserve M1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1-evidence-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            runs/m1/
+            runs/ledger/
+            tasks/japan_fp/judge/cache/
