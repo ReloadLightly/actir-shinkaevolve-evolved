@@ -11,6 +11,7 @@ runs/*
 !runs/ledger/
 runs/ledger/*
 !runs/ledger/.gitkeep
+!runs/ledger/*.jsonl
 results/
 
 # Local Stage B authorization. Carries mode: real + stage_b_authorized: true so
