@@ -8,6 +8,14 @@ plausible enough to freeze.
     python scripts/m1_calibration.py                 # mock: 0 calls, USD 0
     python scripts/m1_calibration.py --estimate      # what a real run would cost
     python scripts/m1_calibration.py --real          # needs Stage B authorized
+    python scripts/m1_calibration.py --real --compare-with gpt-4.1
+
+The last form scores everything twice, with the configured judge and with a
+stronger one, and reports the rank correlation between the two orderings. It
+answers "is the cheap judge good enough" with a measurement rather than a
+guess, for about 1.5% of the project budget — worth it, because the judge is
+the fitness function and a judge too weak to rank the doctrines would make
+every downstream number noise.
 
 Fail-closed (KICKOFF hard rule 1): ``--real`` does not itself authorize
 anything. It only stops the script from silently reporting mock zeros as if
@@ -24,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
@@ -203,6 +212,113 @@ def score_all(client: JudgeClient) -> List[Dict[str, Any]]:
 
 def _fmt_signed(value: float) -> str:
     return f"{value:+.2f}"
+
+
+# --------------------------------------------------------------------------
+# Judge comparison: is the cheap judge good enough?
+# --------------------------------------------------------------------------
+
+
+def _ranks(values: List[float]) -> List[float]:
+    """Ranks, averaging ties — the standard correction for Spearman."""
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        shared = (i + j) / 2 + 1
+        for k in range(i, j + 1):
+            ranks[order[k]] = shared
+        i = j + 1
+    return ranks
+
+
+def spearman(a: List[float], b: List[float]) -> Optional[float]:
+    """Spearman rank correlation. None if either side is completely flat.
+
+    Hand-rolled rather than pulled from scipy: this runs in the same
+    dependency-light environment as the rest of Stage A, and the whole point of
+    the number is that it be reproducible without a scientific stack.
+    """
+    if len(a) != len(b) or len(a) < 2:
+        return None
+    ra, rb = _ranks(a), _ranks(b)
+    n = len(ra)
+    mean_a, mean_b = sum(ra) / n, sum(rb) / n
+    num = sum((x - mean_a) * (y - mean_b) for x, y in zip(ra, rb))
+    den_a = sum((x - mean_a) ** 2 for x in ra)
+    den_b = sum((y - mean_b) ** 2 for y in rb)
+    if den_a == 0 or den_b == 0:
+        return None
+    return num / (den_a * den_b) ** 0.5
+
+
+def compare_report(
+    rows_a: List[Dict[str, Any]],
+    rows_b: List[Dict[str, Any]],
+    model_a: str,
+    model_b: str,
+) -> str:
+    """Do two judges rank the five doctrines the same way?
+
+    This is RESEARCH_DESIGN §4's judge-swap check, run early and cheaply on
+    five portfolios instead of late on a twenty-item archive. If a cheap judge
+    and an expensive one agree on the ordering, the cheap one can carry the
+    search and the saving is real rather than assumed.
+    """
+    scores_a = [r["combined_score"] for r in rows_a]
+    scores_b = [r["combined_score"] for r in rows_b]
+    rho = spearman(scores_a, scores_b)
+
+    order_a = [rows_a[i]["label"] for i in
+               sorted(range(len(rows_a)), key=lambda i: -scores_a[i])]
+    order_b = [rows_b[i]["label"] for i in
+               sorted(range(len(rows_b)), key=lambda i: -scores_b[i])]
+
+    lines = [
+        f"Judge comparison: {model_a}  vs  {model_b}",
+        "",
+        f"| {'Portfolio':<30} | {model_a[:16]:>16} | {model_b[:16]:>16} | {'diff':>7} |",
+        "|" + "-" * 32 + "|" + "-" * 18 + "|" + "-" * 18 + "|" + "-" * 9 + "|",
+    ]
+    for row_a, row_b in zip(rows_a, rows_b):
+        diff = row_b["combined_score"] - row_a["combined_score"]
+        lines.append(
+            f"| {row_a['label']:<30} | {row_a['combined_score']:>16.3f} | "
+            f"{row_b['combined_score']:>16.3f} | {diff:>+7.3f} |"
+        )
+
+    lines += ["", "Ranking (best first):",
+              f"  {model_a}: " + " > ".join(order_a),
+              f"  {model_b}: " + " > ".join(order_b), ""]
+
+    if rho is None:
+        lines.append("Rank correlation: undefined — at least one judge returned "
+                     "a completely flat ordering, which is itself a failure.")
+    else:
+        lines.append(f"Spearman rank correlation: {rho:+.3f}")
+        if rho >= 0.9:
+            lines.append(
+                f"  -> The judges agree. {model_a} is measuring what {model_b} "
+                f"measures, so the cheap judge can carry the search and the "
+                f"saving is real."
+            )
+        elif rho >= 0.6:
+            lines.append(
+                "  -> Broad agreement with real disagreement in the middle of "
+                "the ordering. Read the two tables before choosing; the "
+                "disagreement is itself worth a paragraph in the methods."
+            )
+        else:
+            lines.append(
+                f"  -> The judges disagree. {model_a} is NOT a substitute for "
+                f"{model_b}: the ordering depends on which judge is asked, "
+                "which is the oracle problem showing up early. Use the stronger "
+                "judge, or fix the rubric until they converge."
+            )
+    return "\n".join(lines)
 
 
 def composite_table(rows: List[Dict[str, Any]]) -> str:
@@ -399,14 +515,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--real", action="store_true",
                         help="require a real judge; refuses if the config is mock "
                              "or Stage B is not authorized")
+    parser.add_argument("--compare-with", metavar="MODEL", default=None,
+                        help="also score everything with a second judge and "
+                             "report the rank correlation. Answers 'is the cheap "
+                             "judge good enough' with a measurement instead of a "
+                             "guess. e.g. --compare-with gpt-4.1")
     args = parser.parse_args(argv)
 
     config = JudgeConfig.load(args.judge_config)
 
     if args.estimate:
         estimate(config)
+        if args.compare_with:
+            print()
+            print(f"--compare-with {args.compare_with}: doubles the call count.")
+            estimate(replace(config, model=args.compare_with))
         print()
         preflight(config)
+        if args.compare_with:
+            preflight(replace(config, model=args.compare_with))
         return 0
 
     if args.real and config.mode != REAL:
@@ -469,6 +596,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     cached = sum(r["public"]["judge_calls_cached"] for r in rows)
     calls = len(rows) * len(evaluator.SCENARIO_IDS)
     print(f"Judge calls: {calls} ({cached} from cache).  Cost: ${cost:.4f}")
+
+    if args.compare_with:
+        other_config = replace(config, model=args.compare_with)
+        print()
+        print(f"Second judge: {other_config.model}")
+        if other_config.mode == REAL and not preflight(other_config):
+            print("\nSkipping the comparison: preflight failed for "
+                  f"{other_config.model}.", file=sys.stderr)
+        else:
+            other_rows = score_all(JudgeClient(other_config))
+            other_cost = sum(r["public"]["judge_cost_usd"] for r in other_rows)
+            print()
+            print(compare_report(rows, other_rows, config.model, other_config.model))
+            print()
+            print(f"Comparison cost: ${other_cost:.4f}.  "
+                  f"Both judges together: ${cost + other_cost:.4f}")
+            if config.mode == MOCK:
+                print("(Under the mock judge both tables are identical by "
+                      "construction; the correlation is meaningless here.)")
 
     out_dir = Path(args.out)
     if not out_dir.is_absolute():

@@ -8,7 +8,7 @@ projected Lowy Asia Power Index composite in 2030. The third experiment of
 and hard rules: [`KICKOFF.md`](KICKOFF.md).**
 
 Status: **Stage A complete, M0 approved, M1 inputs ready** (2026-08-17) —
-API-free foundation, 144 tests green, no network call possible. The five M1
+API-free foundation, 179 tests green, no network call possible. The five M1
 portfolios (December 2022 plus four rival schools) are written and pass the
 gate. Scenarios and rubric are approved but deliberately still `DRAFT`; they
 freeze after the M1 smoke test. Stage B — the first real judge calls, ~$0.04 —
@@ -29,7 +29,7 @@ both backends are implemented and send byte-identical prompts.
 
 ```bash
 pip install -r requirements.txt
-pytest -q                                    # 144 tests, no network
+pytest -q                                    # 179 tests, no network
 
 # Score the December 2022 seed portfolio with the mock judge
 python tasks/japan_fp/evaluate.py \
@@ -50,7 +50,7 @@ tasks/japan_fp/
   schema.py         # PolicyPortfolio: the genotype
   initial.py        # the December 2022 seed, inside an EVOLVE-BLOCK
   evaluate.py       # Stage 1 validity gate -> Stage 2 frozen judge -> Lowy aggregation
-  run_evo.py        # ShinkaEvolve wiring + run provenance manifest
+  run_evo.py        # ShinkaEvolve wiring + provenance manifest (--dry-run needs no engine)
   judge/client.py   # frozen judge: MOCK by default, content-hash cache, cost ledger
   seeds/            # the four rival-school portfolios for M1 (see seeds/README.md)
   scenarios/        # S1-S3 vignettes            [M0-approved, freezes after M1]
@@ -60,7 +60,7 @@ configs/            # judge.yaml, pilot.yaml (20 gens), main.yaml (30), ablation
 scripts/freeze.py         # re-record frozen hashes under a new version
 scripts/m1_calibration.py # the M1 table: 5 portfolios x 3 scenarios
 tests/              # Stage A tests + the seed and M1-harness tests
-docs/               # DECISIONS.md, BUDGET.md, API_KEYS.md, JUDGE_MODEL_NOTE.md, OPEN_QUESTIONS.md
+docs/               # DECISIONS.md, BUDGET.md, RUN_M1_LOCALLY.md, API_KEYS.md, ...
 ```
 
 ## The M1 calibration test
@@ -78,6 +78,9 @@ python scripts/m1_calibration.py --real       # refuses unless Stage B is author
 
 Each seed is aimed at a specific rubric rule, so a miscalibrated rubric fails
 visibly rather than quietly — see [`tasks/japan_fp/seeds/README.md`](tasks/japan_fp/seeds/README.md).
+
+To run it for real from your own machine, with your key never leaving it:
+[`docs/RUN_M1_LOCALLY.md`](docs/RUN_M1_LOCALLY.md).
 
 ## How fitness works
 

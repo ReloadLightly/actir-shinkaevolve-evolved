@@ -12,3 +12,7 @@ runs/*
 runs/ledger/*
 !runs/ledger/.gitkeep
 results/
+
+# Local Stage B authorization. Carries mode: real + stage_b_authorized: true so
+# that the SHIPPED configs/judge.yaml can stay locked forever. Never commit it.
+configs/judge.local.yaml

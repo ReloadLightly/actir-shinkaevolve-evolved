@@ -351,6 +351,67 @@ def test_m1_refuses_to_start_an_armed_run_that_would_fail(tmp_path, monkeypatch)
     assert code == 3, "an armed run with no key must refuse to start"
 
 
+def test_spearman_on_identical_orderings_is_one():
+    assert m1_calibration.spearman([1, 2, 3, 4], [1, 2, 3, 4]) == pytest.approx(1.0)
+
+
+def test_spearman_on_reversed_orderings_is_minus_one():
+    assert m1_calibration.spearman([1, 2, 3, 4], [4, 3, 2, 1]) == pytest.approx(-1.0)
+
+
+def test_spearman_uses_ranks_not_magnitudes():
+    """Two judges can disagree wildly on the numbers and still rank alike;
+    that is exactly the case where the cheap judge is safe to use."""
+    assert m1_calibration.spearman(
+        [38.9, 39.2, 40.1, 41.0], [10.0, 20.0, 30.0, 90.0]
+    ) == pytest.approx(1.0)
+
+
+def test_spearman_is_undefined_for_a_flat_judge():
+    """The mock judge scores everything identically. A correlation against a
+    flat ordering is meaningless, and reporting 0.0 would read as disagreement."""
+    assert m1_calibration.spearman([1.0, 1.0, 1.0], [1.0, 2.0, 3.0]) is None
+
+
+def test_spearman_handles_ties_by_averaging_ranks():
+    assert m1_calibration.spearman([1, 2, 2, 3], [1, 2, 2, 3]) == pytest.approx(1.0)
+
+
+def _fake_rows(scores):
+    return [
+        {"label": f"P{i}", "combined_score": s} for i, s in enumerate(scores)
+    ]
+
+
+def test_compare_report_endorses_the_cheap_judge_when_rankings_agree():
+    text = m1_calibration.compare_report(
+        _fake_rows([38.0, 39.0, 40.0, 41.0, 42.0]),
+        _fake_rows([30.0, 35.0, 44.0, 46.0, 60.0]),
+        "cheap", "expensive",
+    )
+    assert "+1.000" in text
+    assert "agree" in text
+
+
+def test_compare_report_warns_when_the_judges_disagree():
+    text = m1_calibration.compare_report(
+        _fake_rows([38.0, 39.0, 40.0, 41.0, 42.0]),
+        _fake_rows([42.0, 41.0, 40.0, 39.0, 38.0]),
+        "cheap", "expensive",
+    )
+    assert "NOT a substitute" in text
+    assert "oracle problem" in text
+
+
+def test_compare_report_flags_a_flat_judge_as_a_failure():
+    text = m1_calibration.compare_report(
+        _fake_rows([38.8475] * 5),
+        _fake_rows([38.0, 39.0, 40.0, 41.0, 42.0]),
+        "mock", "real",
+    )
+    assert "undefined" in text and "failure" in text
+
+
 def test_m1_estimate_stays_under_the_stage_b_ceiling(capsys):
     m1_calibration.estimate(JudgeConfig())
     out = capsys.readouterr().out

@@ -77,11 +77,29 @@ competitive — which is exactly the trade-off the bandit exists to discover.
 
 Three ways to spend $15, in the order I would recommend them:
 
-**A — Stage-gate it (recommended).** Run M1 ($0.038), then the pilot ($1.00).
-The ledger then reports the *actual* cost per evaluation rather than my
-estimate, and the trajectory shows whether 30 generations produces any signal
-at all. Commit the remaining ~$13 only after seeing both. This matches
-KICKOFF's own stage-gate structure and costs nothing to choose.
+**A — Stage-gate it, and validate the judge first (recommended).**
+
+```bash
+python scripts/m1_calibration.py --real --compare-with gpt-4.1   # $0.23
+```
+
+This scores all five doctrines twice — once with the configured
+`gpt-4.1-mini`, once with the 5×-dearer `gpt-4.1` — and reports the Spearman
+rank correlation between the two orderings.
+
+It is the single most valuable $0.23 in the project, because it removes the
+one assumption that could waste the other $14.77. **The judge is the fitness
+function.** If it is too weak to rank five deliberately-different doctrines,
+every number downstream is noise and the whole budget buys nothing. If the two
+judges agree, the cheap one is measuring what the dear one measures and the
+75%-of-budget saving is demonstrated rather than hoped for. If they disagree,
+that is the oracle problem arriving early and cheaply, while there is still
+budget to respond to it.
+
+Then run the pilot ($1.00) and let the ledger report the *actual* cost per
+evaluation instead of my estimate. Commit the remaining ~$13 only after both.
+Total spent before any irreversible commitment: **$1.23**, under a tenth of
+the budget.
 
 **B — Six thin arms.** Keep the full comparative structure at ~30–40
 evaluations per arm, with a cheap ensemble. Preserves every comparison §4 asks
