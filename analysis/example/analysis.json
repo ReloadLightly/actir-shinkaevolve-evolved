@@ -1,0 +1,90 @@
+{
+  "surrogate": true,
+  "not_a_result": "Surrogate-scored archive: pipeline validation only, never report.",
+  "evaluated": 301,
+  "valid": 281,
+  "rejected_by_gate": 20,
+  "baseline_2025_composite": 38.8475,
+  "reported_2025_composite": 38.8,
+  "seed_score": 41.254935,
+  "best_score": 41.426837,
+  "best_id": 300,
+  "improvement_over_seed": 0.171902,
+  "improvement_over_2025": 2.579337,
+  "best_lineage": [
+    0,
+    1,
+    2,
+    4,
+    5,
+    8,
+    14,
+    21,
+    24,
+    27,
+    48,
+    53,
+    83,
+    197,
+    290,
+    300
+  ],
+  "best_lineage_depth": 15,
+  "effort_seed": {
+    "economic_capability": 0.13,
+    "military_capability": 0.29,
+    "economic_relationships": 0.13,
+    "resilience": 0.14,
+    "future_resources": 0.06,
+    "defence_networks": 0.15,
+    "diplomatic_influence": 0.06,
+    "cultural_influence": 0.04
+  },
+  "effort_best": {
+    "economic_capability": 0.3996,
+    "military_capability": 0.1655,
+    "economic_relationships": 0.136,
+    "resilience": 0.0919,
+    "future_resources": 0.0591,
+    "defence_networks": 0.046,
+    "diplomatic_influence": 0.0394,
+    "cultural_influence": 0.0625
+  },
+  "operators": {
+    "break_invariant": {
+      "tried": 11,
+      "valid": 0,
+      "improved": 0
+    },
+    "concentrate": {
+      "tried": 46,
+      "valid": 46,
+      "improved": 12
+    },
+    "defence_path": {
+      "tried": 36,
+      "valid": 27,
+      "improved": 0
+    },
+    "initiative:add": {
+      "tried": 27,
+      "valid": 27,
+      "improved": 0
+    },
+    "initiative:drop": {
+      "tried": 9,
+      "valid": 9,
+      "improved": 0
+    },
+    "phases": {
+      "tried": 28,
+      "valid": 28,
+      "improved": 0
+    },
+    "reallocate": {
+      "tried": 143,
+      "valid": 143,
+      "improved": 48
+    }
+  }
+}

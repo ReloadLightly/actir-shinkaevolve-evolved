@@ -8,7 +8,7 @@ projected Lowy Asia Power Index composite in 2030. The third experiment of
 and hard rules: [`KICKOFF.md`](KICKOFF.md).**
 
 Status: **M1 run #1 complete — rubric corrected, awaiting re-approval** (2026-08-17) —
-API-free foundation, 179 tests green, no network call possible. M1 ran for **$0.1869** and
+196 tests green. **The evolution loop now runs end to end offline** — 301 evaluations, $0.00, via a surrogate judge and programmatic mutation (`scripts/offline_evolution.py`), with the analysis layer built on its output. M1 ran for **$0.1869** and
 found the rubric wanting: judge agreement −0.300, and the composite spread
 across five opposite doctrines (0.70) smaller than the disagreement between two
 judges (0.92). Rubric revision 2 addresses it; scenarios unchanged. See
@@ -29,7 +29,7 @@ both backends are implemented and send byte-identical prompts.
 
 ```bash
 pip install -r requirements.txt
-pytest -q                                    # 179 tests, no network
+pytest -q                                    # 196 tests, no network
 
 # Score the December 2022 seed portfolio with the mock judge
 python tasks/japan_fp/evaluate.py \
@@ -59,7 +59,8 @@ tasks/japan_fp/
 configs/            # judge.yaml, pilot.yaml (20 gens), main.yaml (30), ablations/ + baselines
 scripts/freeze.py         # re-record frozen hashes under a new version
 scripts/m1_calibration.py # the M1 table: 5 portfolios x 3 scenarios
-tests/              # Stage A tests + the seed and M1-harness tests
+analysis/           # archive_analysis.py -> report.md + SVG figures (example/ has output)
+tests/              # Stage A tests + seeds, M1 harness, configs, offline pipeline
 docs/               # DECISIONS.md, BUDGET.md, RUN_M1_LOCALLY.md, API_KEYS.md, ...
 ```
 

@@ -36,6 +36,10 @@ from lowy import DELTA_MAX, DELTA_MIN, MEASURES
 
 MOCK = "mock"
 REAL = "real"
+#: Deterministic offline stand-in. Makes no network call and is never a result;
+#: see surrogate.py. Exists so the evolution loop can be exercised end to end
+#: without spending anything, which the all-zero mock judge cannot do.
+SURROGATE = "surrogate"
 
 #: Per-million-token list prices, USD. Anthropic rows checked 2026-08-17
 #: against the Claude pricing table; OpenAI rows checked 2026-08-17 against
@@ -180,6 +184,9 @@ class JudgeVerdict:
     usage: Dict[str, int] = field(default_factory=dict)
     cost_usd: float = 0.0
     raw: Dict[str, Any] = field(default_factory=dict)
+    #: True only for the offline closed-form stand-in. Propagates into metrics
+    #: so a surrogate run can never be read as a scored one.
+    surrogate: bool = False
 
 
 def zero_verdict(scenario_id: str, cache_key: str = "mock") -> JudgeVerdict:
@@ -259,9 +266,10 @@ class JudgeClient:
     ) -> None:
         self.config = config or JudgeConfig.load()
         self.repo_root = repo_root or Path(__file__).resolve().parents[3]
-        if self.config.mode not in {MOCK, REAL}:
+        if self.config.mode not in {MOCK, REAL, SURROGATE}:
             raise ValueError(
-                f"judge mode must be {MOCK!r} or {REAL!r}, got {self.config.mode!r}"
+                f"judge mode must be one of {MOCK!r}, {SURROGATE!r}, {REAL!r}; "
+                f"got {self.config.mode!r}"
             )
 
     # -- paths -------------------------------------------------------------
@@ -321,6 +329,19 @@ class JudgeClient:
 
         if self.config.mode == MOCK:
             return zero_verdict(scenario_id, key)
+
+        if self.config.mode == SURROGATE:
+            from judge.surrogate import surrogate_deltas, surrogate_mechanisms
+
+            deltas = surrogate_deltas(scenario_id, portfolio)
+            return JudgeVerdict(
+                scenario_id=scenario_id,
+                deltas=deltas,
+                mechanisms=surrogate_mechanisms(scenario_id, deltas),
+                cache_key=key,
+                mocked=True,        # never a real judgement
+                surrogate=True,
+            )
 
         cached = self._read_cache(key)
         if cached is not None:

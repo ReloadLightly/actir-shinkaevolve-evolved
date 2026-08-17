@@ -301,6 +301,7 @@ def score_portfolio(
         "improvement_vs_2025": round(fitness - baseline_composite, 4),
         "judge_calls_cached": sum(1 for v in verdicts if v.cached),
         "judge_mocked": all(v.mocked for v in verdicts),
+        "judge_surrogate": any(v.surrogate for v in verdicts),
         "judge_cost_usd": round(sum(v.cost_usd for v in verdicts), 6),
         "dials_used": sum(1 for d in portfolio.dials.values() if d.share > 0),
         "custom_initiatives": len(portfolio.initiatives),
