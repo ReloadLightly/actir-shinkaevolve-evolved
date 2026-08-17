@@ -141,8 +141,34 @@ opinion.
 
 ## Pending
 
+## Budget cut to USD 15 for the whole project — 2026-08-17
+
+Roland set the total project budget at **USD 15**, superseding KICKOFF's
+per-stage figures (Stage B 1 + Stage C 10 + Stage D 250 = 261). KICKOFF is
+left unedited as the original spec; where the two disagree, 15 wins.
+
+**This caught a latent breach.** The configs as written authorised **USD 290**
+— seven Stage D runs at USD 40 plus a USD 10 pilot. Nothing had been spent, and
+the judge was locked the whole time, but nothing in the repo would have stopped
+it. There is now a `PROJECT_CEILING` test that fails if the authorised total
+exceeds the budget.
+
+Every ceiling was re-cut to fit; the full allocation and the reasoning are in
+`BUDGET.md`. Ceilings were only ever lowered, per hard rule 4.
+
+**The finding that matters more than the arithmetic:** at $2.00 per Stage D
+arm, the mutation ensemble decides whether that buys **9 evaluations or 40**.
+The current opus-led ensemble gives 9, which is not a search. Re-picking the
+ensemble is now the highest-value open decision, and it subsumes pending
+decision 2.
+
+---
+
+## Pending
+
 | # | Decision | Needed by |
 |---|---|---|
-| 1 | Stage B go + an **`OPENAI_API_KEY` visible to the session** (ceiling USD 1; M1 estimated at $0.19). Confirm with `python scripts/m1_calibration.py --estimate`, which now preflights the key. | before M1 |
-| 2 | Review of the mutation-ensemble model list in `configs/*.yaml` — four models across mixed tiers, but your API access to each is unverified and two ids (`gpt-5.4`, `gemini-3-flash-preview`) are placeholders | before the pilot |
-| ~~3~~ | ~~Second judge family for the judge-swap check~~ — **resolved 2026-08-17** by the M0 amendment: the judge is OpenAI, so `claude-haiku-4-5-20251001` is the M4 swap judge. Both backends are implemented and send identical prompts. | ~~M4~~ |
+| 1 | Stage B go + an **`OPENAI_API_KEY` visible to the session** (M1 estimated at $0.19). Confirm with `python scripts/m1_calibration.py --estimate`, which preflights the key. | before M1 |
+| 2 | **Re-pick the mutation ensemble.** Two of the four ids are placeholders that do not resolve (`gpt-5.4`, `gemini-3-flash-preview`); the other two are too expensive for a USD 15 budget. Constraints: `gpt-4.1-2025-04-14` is barred by hard rule 2, and `claude-haiku-4-5-20251001` is the M4 swap judge so using it as a mutator weakens that check. See `BUDGET.md`. | before the pilot |
+| 3 | **How to spend the USD 15**: stage-gate it (recommended), six thin arms, or two deep arms. `BUDGET.md` costs all three. Choosing A costs nothing now and defers the rest until the pilot's ledger reports real per-evaluation cost. | before Stage D |
+| ~~4~~ | ~~Second judge family for the judge-swap check~~ — **resolved 2026-08-17** by the M0 amendment: the judge is OpenAI, so `claude-haiku-4-5-20251001` is the M4 swap judge. Both backends are implemented and send identical prompts. | ~~M4~~ |

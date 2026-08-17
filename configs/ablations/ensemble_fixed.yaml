@@ -28,8 +28,8 @@ db_config:
 evo_config:
   patch_types: [diff, full, cross]
   patch_type_probs: [0.6, 0.3, 0.1]
-  num_generations: 150
-  max_api_costs: 40.0                 # KICKOFF hard rule 4: per-run share of the USD 250 total
+  num_generations: 30
+  max_api_costs: 2.00                  # USD 15 project ceiling (docs/BUDGET.md)
   max_patch_resamples: 3
   max_patch_attempts: 1
   max_novelty_attempts: 1
