@@ -14,34 +14,38 @@ was ever spent; the breach was latent in the configuration.
 ## What one evaluation costs
 
 An evaluation is one mutation proposal plus three judge calls (one per
-scenario). The judge side is fixed at **$0.038** — three calls to
-`gpt-4.1-2025-04-14` at roughly 3,500 in / 700 out each.
+scenario). The judge side is fixed at **$0.0076** — three calls to
+`gpt-4.1-mini-2025-04-14` at roughly 3,500 in / 700 out each.
 
 The mutation side is where the money goes, exactly as RESEARCH_DESIGN §3
 predicted. At roughly 10,000 in / 5,000 out per proposal:
 
 | Mutation model | Per proposal | Per evaluation | Evaluations for $12 |
 |---|---|---|---|
-| `claude-opus-5` | $0.175 | **$0.213** | 56 |
-| `claude-sonnet-5` | $0.105 | **$0.143** | 84 |
-| `claude-haiku-4-5-20251001` | $0.035 | **$0.073** | 164 |
-| `gpt-4.1-mini` | $0.012 | **$0.050** | 240 |
+| `claude-opus-5` *(was configured)* | $0.175 | $0.183 | 65 |
+| `claude-sonnet-5` *(was configured)* | $0.105 | $0.113 | 106 |
+| `gpt-4.1` | $0.060 | $0.068 | 177 |
+| `gpt-4.1-nano` | $0.003 | **$0.0106** | **1,136** |
 
-Those last two columns are the whole problem in one line. **The ensemble
-choice decides whether the study gets 56 or 240 evaluations in total** — not
-per run, in total, across every run that will ever happen.
+**The ensemble choice decides whether the study gets 65 or 1,136 evaluations
+in total** — not per run; in total, across every run that will ever happen.
+
+Prices verified 2026-08-17 against published OpenAI pricing. An earlier
+revision of this page used figures from memory, including three model ids
+(`gpt-5-mini`, `gpt-5-nano`, `gpt-5`) that do not exist.
 
 ## What the design asks for, versus what fits
 
 RESEARCH_DESIGN §4 wants main + 2 baselines + 3 ablations, at 150 evaluations
-each: **900 evaluations**. Against $12 of search budget that is 16× over at the
-cheapest tier and 60× over at the current opus-led ensemble.
+each: **900 evaluations**. Against $12 of search budget that was 14× over on
+the original opus-led ensemble. On the re-picked ensemble it is roughly 3×
+over — still a re-cut, but a far smaller one.
 
 So the study had to be re-cut. The current allocation:
 
 | Line | Ceiling | Note |
 |---|---|---|
-| M1 calibration | $0.25 | judge only, 15 calls, actual estimate $0.19 |
+| M1 calibration | $0.25 | judge only, 15 calls, actual estimate **$0.038** |
 | Pilot | $1.00 | 20 generations |
 | Stage D — main | $2.00 | 30 generations |
 | Stage D — baseline: random search | $2.00 | matched |
@@ -49,7 +53,7 @@ So the study had to be re-cut. The current allocation:
 | Stage D — ablation: parent selection | $2.00 | matched |
 | Stage D — ablation: ensemble | $2.00 | matched |
 | Stage D — ablation: novelty | $2.00 | matched |
-| M4 judge-swap re-scoring | $0.50 | top-20 archive, 60 calls on Haiku |
+| M4 judge-swap re-scoring | $0.50 | top-20 archive, 60 calls; needs an `ANTHROPIC_API_KEY` |
 | Contingency | $1.25 | |
 | **Total** | **$15.00** | |
 
@@ -58,21 +62,22 @@ comparisons measure mechanism only if spend is held equal.
 
 **At $2.00 per arm, the ensemble decides what that buys:**
 
-| Ensemble tier | Evaluations per arm |
+| Ensemble | Evaluations per arm |
 |---|---|
-| opus-led (current) | **9** |
-| sonnet | 14 |
-| haiku | 27 |
-| `gpt-4.1-mini` | 40 |
+| opus-led *(the original config)* | **9** |
+| `gpt-4.1` only | 29 |
+| `gpt-4.1` + `gpt-4.1-nano`, 50/50 *(now configured)* | **51** |
+| `gpt-4.1-nano` only | 189 |
 
-Nine evaluations per arm is not a search; it is nine samples. The current
-ensemble has to change or the Stage D comparisons will be noise.
+Nine evaluations per arm is not a search; it is nine samples. The re-picked
+ensemble gives roughly 51, and more if the UCB1 bandit finds the nano tier
+competitive — which is exactly the trade-off the bandit exists to discover.
 
 ## The open decision
 
 Three ways to spend $15, in the order I would recommend them:
 
-**A — Stage-gate it (recommended).** Run M1 ($0.19), then the pilot ($1.00).
+**A — Stage-gate it (recommended).** Run M1 ($0.038), then the pilot ($1.00).
 The ledger then reports the *actual* cost per evaluation rather than my
 estimate, and the trajectory shows whether 30 generations produces any signal
 at all. Commit the remaining ~$13 only after seeing both. This matches
@@ -91,26 +96,49 @@ structure, underpowered". C says "here is one real search against one real
 baseline". I would take A now and decide between B and C with the pilot's
 numbers in hand.
 
-## The ensemble has to be re-picked regardless
+## The ensemble, re-picked 2026-08-17
 
-`configs/*.yaml` still name four models:
+Was:
 
 ```yaml
 llm_models:
-  - "claude-opus-5"          # $0.213/eval — unaffordable at this budget
-  - "claude-sonnet-5"        # $0.143/eval — affordable only for a single arm
-  - "gpt-5.4"                # placeholder, does not exist
-  - "gemini-3-flash-preview" # placeholder, unverified
+  - "claude-opus-5"          # $0.183/eval — unaffordable at this budget
+  - "claude-sonnet-5"        # $0.113/eval — affordable for one arm, not six
+  - "gpt-5.4"                # real, but rejects `temperature` (see below)
+  - "gemini-3-flash-preview" # unverified, and no Google key provisioned
 ```
 
-Two are too expensive and two do not resolve. `tests/test_configs.py` carries
-the placeholders in `UNVERIFIED_MODEL_IDS` with a strict xfail, so the suite
-flips red the moment they are fixed and the marker cannot be left behind.
+Now:
 
-One constraint when re-picking: `claude-haiku-4-5-20251001` is the M4
-judge-swap model. Using it as a mutator too would weaken that check, since the
-swap judge would have written some of what it re-scores. `gpt-4.1-2025-04-14`
-is barred outright by hard rule 2 — it is the judge.
+```yaml
+llm_models:
+  - "gpt-4.1"                # $0.068/eval — the strong tier
+  - "gpt-4.1-nano"           # $0.0106/eval — the cheap tier, 20x apart
+```
+
+**The constraint that decided this: the entire OpenAI GPT-5 series rejects the
+`temperature` parameter.** OpenAI removed it there to avoid injecting
+randomness into reasoning chains — the same move Anthropic made on Claude 5,
+and the same finding that shaped the original M0 note. It rules out GPT-5.4,
+5.5 and 5.6 twice over: the judge needs `temperature: 0` per §2.2, and the
+ensemble uses `temperatures: [0.0, 0.5, 1.0]` as its diversity mechanism.
+`tests/test_configs.py` now fails if any model rejecting `temperature` appears
+in any config.
+
+That leaves the GPT-4.1 family as the only usable OpenAI models, and it has
+exactly three members. One is the judge, so two remain for the ensemble.
+
+**This is a deviation from RESEARCH_DESIGN §3**, which asks for four models
+across mixed tiers. Two is what the constraints permit on OpenAI alone. The
+tiers are genuinely mixed — `gpt-4.1` costs 20× `gpt-4.1-nano`, so the UCB1
+bandit still has a real trade-off to explore. Getting back to four would need
+a second provider key (Google or Anthropic); it does not block anything now,
+and belongs in the methods section either way.
+
+Two ids remain barred: `gpt-4.1-mini-2025-04-14` is the judge (hard rule 2),
+and `claude-haiku-4-5-20251001` is the M4 judge-swap model — using it as a
+mutator would weaken that check, since the swap judge would be re-scoring work
+it partly wrote.
 
 ## Standing rules
 
@@ -121,6 +149,5 @@ is barred outright by hard rule 2 — it is the judge.
   counts, its cost, and the price table used — so the ledger stays truthful
   even if list prices change, and a wrong estimate is recoverable after the
   fact rather than lost.
-- The OpenAI price rows in `judge/client.py` are **unverified**, flagged in
-  code and by `--estimate`. Confirm them against the account before relying on
-  any figure on this page.
+- Prices in `judge/client.py` were verified on 2026-08-17 against published
+  pricing. `--estimate` reports the current figure and preflights the key.

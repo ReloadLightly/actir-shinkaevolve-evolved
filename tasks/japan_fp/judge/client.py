@@ -37,28 +37,35 @@ from lowy import DELTA_MAX, DELTA_MIN, MEASURES
 MOCK = "mock"
 REAL = "real"
 
-#: Per-million-token list prices, USD. The Anthropic rows were checked
-#: 2026-08-17 against the Claude pricing table. **The OpenAI rows are from
-#: memory and must be verified before a real run** — run
-#: ``scripts/m1_calibration.py --estimate`` and sanity-check the figure.
+#: Per-million-token list prices, USD. Anthropic rows checked 2026-08-17
+#: against the Claude pricing table; OpenAI rows checked 2026-08-17 against
+#: published pricing pages. An earlier revision of this table carried
+#: `gpt-5-mini` / `gpt-5-nano` / `gpt-5` from memory — those ids do not exist;
+#: the 2026 lineup is the GPT-5.4/5.5/5.6 series.
 #:
 #: The ledger records the rate it used, so a later price change does not
 #: silently rewrite the cost history of an earlier run, and a wrong list price
 #: is recoverable after the fact rather than lost.
 PRICING_USD_PER_MTOK: Dict[str, Dict[str, float]] = {
-    # Anthropic — verified
+    # Anthropic
     "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
     "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
     "claude-sonnet-5": {"input": 3.00, "output": 15.00},
     "claude-opus-5": {"input": 5.00, "output": 25.00},
-    # OpenAI — UNVERIFIED, from memory. Check before spending against a ceiling.
-    "gpt-5-nano": {"input": 0.05, "output": 0.40},
-    "gpt-5-mini": {"input": 0.25, "output": 2.00},
-    "gpt-5": {"input": 1.25, "output": 10.00},
+    # OpenAI, GPT-4.1 family — these still accept `temperature`
     "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
+    "gpt-4.1-nano-2025-04-14": {"input": 0.10, "output": 0.40},
     "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+    "gpt-4.1-mini-2025-04-14": {"input": 0.40, "output": 1.60},
     "gpt-4.1": {"input": 2.00, "output": 8.00},
     "gpt-4.1-2025-04-14": {"input": 2.00, "output": 8.00},
+    # OpenAI, GPT-5 series — priced here for completeness, but every one of
+    # them rejects `temperature` (see no_sampling_params), so none can serve as
+    # the judge and none can join an ensemble that varies temperature.
+    "gpt-5.4-nano": {"input": 0.20, "output": 1.25},
+    "gpt-5.4-mini": {"input": 0.75, "output": 4.50},
+    "gpt-5.4": {"input": 2.50, "output": 15.00},
+    "gpt-5.5": {"input": 5.00, "output": 30.00},
 }
 
 #: Environment variable each provider's SDK reads its key from. Used only for
@@ -94,14 +101,20 @@ class JudgeConfig:
     cache_dir: str = "tasks/japan_fp/judge/cache"
     ledger_path: str = "runs/ledger/judge_calls.jsonl"
     #: Models that reject the `temperature` parameter outright (HTTP 400).
-    #: The Claude 5 family dropped sampling parameters; the OpenAI reasoning
-    #: tiers (o-series, and gpt-5 when reasoning) do the same.
+    #: Matched by prefix, so "gpt-5" covers the whole 5.x series.
+    #:
+    #: Two families independently removed sampling parameters: Claude 5, and
+    #: **the entire OpenAI GPT-5 series** — OpenAI dropped temperature control
+    #: there to avoid injecting randomness into reasoning chains. That is why
+    #: the judge is a GPT-4.1 model: RESEARCH_DESIGN 2.2 requires temperature 0,
+    #: and GPT-4.1 is the newest OpenAI family that still accepts it.
     no_sampling_params: Tuple[str, ...] = (
         "claude-opus-5",
         "claude-sonnet-5",
         "claude-fable-5",
         "claude-opus-4-8",
         "claude-opus-4-7",
+        "gpt-5",
         "o1",
         "o3",
         "o4",

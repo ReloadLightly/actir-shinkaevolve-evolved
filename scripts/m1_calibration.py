@@ -160,9 +160,6 @@ def estimate(config: JudgeConfig) -> None:
           f"at ${rates['input']:.2f}/${rates['output']:.2f} per Mtok:")
     print(f"  estimated total: ${cost:.4f}   (KICKOFF Stage B ceiling: $1.00)")
     print("Cached calls cost nothing on a re-run.")
-    if config.provider == "openai":
-        print("NOTE: the OpenAI price rows are unverified (see client.py). "
-              "Confirm against your account before relying on this figure.")
 
 
 # --------------------------------------------------------------------------

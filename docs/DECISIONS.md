@@ -62,6 +62,11 @@ an explicit go in chat *and* an API key in the environment.
 
 ## M0 amendment — judge switched to the OpenAI tier, 2026-08-17
 
+> **Superseded the same day** on the model, not the provider: the judge is
+> now `gpt-4.1-mini-2025-04-14`, not `gpt-4.1-2025-04-14`. See "Models
+> re-picked on verified prices" below. The reasoning in this section still
+> holds — it is why the judge is an OpenAI GPT-4.1 model at all.
+
 **Roland chose the OpenAI judge**, amending the M0 decision recorded above.
 The M0 row for "Judge model" is superseded by this one; nothing else in the M0
 approval changes.
@@ -122,7 +127,7 @@ needed no decision from Roland and spent nothing: it is all API-free.
 | Item | What |
 |---|---|
 | `tasks/japan_fp/seeds/` | Four rival doctrines — autonomous rearmament, accommodation, status-quo-plus, middle-power internationalism — each a standalone program the evaluator loads exactly like an evolved individual. |
-| `scripts/m1_calibration.py` | Scores all five portfolios across all three scenarios and writes the KICKOFF Stage B table to `runs/m1/`. Estimated cost of a real run: **$0.11** against the $1 ceiling. |
+| `scripts/m1_calibration.py` | Scores all five portfolios across all three scenarios and writes the KICKOFF Stage B table to `runs/m1/`. Estimated cost of a real run: **$0.038** against the $1 ceiling. |
 | `tests/test_seeds.py` | 45 tests, including that the four schools are materially distinct doctrines rather than variants of one position. |
 
 Each seed is aimed at a specific rubric rule so that a miscalibrated rubric
@@ -138,8 +143,6 @@ only the harness — the doctrines cannot separate until a real judge has an
 opinion.
 
 ---
-
-## Pending
 
 ## Budget cut to USD 15 for the whole project — 2026-08-17
 
@@ -158,9 +161,45 @@ Every ceiling was re-cut to fit; the full allocation and the reasoning are in
 
 **The finding that matters more than the arithmetic:** at $2.00 per Stage D
 arm, the mutation ensemble decides whether that buys **9 evaluations or 40**.
-The current opus-led ensemble gives 9, which is not a search. Re-picking the
-ensemble is now the highest-value open decision, and it subsumes pending
-decision 2.
+The opus-led ensemble gave 9, which is not a search. That made re-picking the
+ensemble the highest-value open decision — resolved immediately below.
+
+---
+
+## Models re-picked on verified prices — 2026-08-17
+
+Roland asked for models at a fair price. Prices were checked against published
+pricing rather than recalled, and that turned up two errors in my own earlier
+work, both now corrected in code and docs:
+
+1. **`gpt-5.4` is a real model.** I had listed it as a non-existent
+   placeholder. It exists and is priced at $2.50/$15.00.
+2. **`gpt-5-mini`, `gpt-5-nano` and `gpt-5` do not exist** under those names.
+   I had priced all three from memory. The 2026 lineup is the GPT-5.4/5.5/5.6
+   series. A test now fails if those ids return to the price table, since a
+   price entry would let an unusable model pass the preflight.
+
+**The finding that decided the ensemble: the entire OpenAI GPT-5 series
+rejects the `temperature` parameter** — the same move Anthropic made on
+Claude 5, and the same constraint that shaped the original M0 note. It rules
+the series out twice: the judge needs `temperature: 0` (§2.2), and the
+ensemble varies temperature as its diversity mechanism. So the usable OpenAI
+models are the three GPT-4.1 tiers.
+
+| | Was | Now | Effect |
+|---|---|---|---|
+| Judge | `gpt-4.1-2025-04-14` | **`gpt-4.1-mini-2025-04-14`** | M1 $0.19 → **$0.038**; judge cost per evaluation $0.038 → $0.0076 |
+| Ensemble | opus-5, sonnet-5, gpt-5.4, gemini-3-flash | **`gpt-4.1` + `gpt-4.1-nano`** | ~9 → **~51** evaluations per Stage D arm |
+
+The judge stays in §2.2's "cheap, frozen, boring" tier, still a dated snapshot,
+still temperature 0. The ensemble keeps genuinely mixed tiers — `gpt-4.1`
+costs 20× `gpt-4.1-nano`, so the UCB1 bandit has a real trade-off — but has
+**two models where §3 asks for four**. That is a recorded deviation: the
+temperature constraint plus hard rule 2 leaves only two usable OpenAI models.
+Restoring four needs a second provider key. See `BUDGET.md`.
+
+**M4 now needs an `ANTHROPIC_API_KEY`** for the judge-swap check, since the
+judge is OpenAI and §4 requires a different model family.
 
 ---
 
@@ -168,7 +207,8 @@ decision 2.
 
 | # | Decision | Needed by |
 |---|---|---|
-| 1 | Stage B go + an **`OPENAI_API_KEY` visible to the session** (M1 estimated at $0.19). Confirm with `python scripts/m1_calibration.py --estimate`, which preflights the key. | before M1 |
-| 2 | **Re-pick the mutation ensemble.** Two of the four ids are placeholders that do not resolve (`gpt-5.4`, `gemini-3-flash-preview`); the other two are too expensive for a USD 15 budget. Constraints: `gpt-4.1-2025-04-14` is barred by hard rule 2, and `claude-haiku-4-5-20251001` is the M4 swap judge so using it as a mutator weakens that check. See `BUDGET.md`. | before the pilot |
-| 3 | **How to spend the USD 15**: stage-gate it (recommended), six thin arms, or two deep arms. `BUDGET.md` costs all three. Choosing A costs nothing now and defers the rest until the pilot's ledger reports real per-evaluation cost. | before Stage D |
+| 1 | Stage B go + an **`OPENAI_API_KEY` visible to the session** (M1 estimated at $0.038). Confirm with `python scripts/m1_calibration.py --estimate`, which preflights the key. | before M1 |
+| 2 | **How to spend the USD 15**: stage-gate it (recommended), six thin arms, or two deep arms. `BUDGET.md` costs all three. Choosing A costs nothing now and defers the rest until the pilot's ledger reports real per-evaluation cost. | before Stage D |
+| 3 | Optional: a second provider key (Google or Anthropic) to restore §3's four-model ensemble. Does not block anything. | before Stage D |
+| 4 | An **`ANTHROPIC_API_KEY`** for the M4 judge-swap check against `claude-haiku-4-5-20251001`. | M4 |
 | ~~4~~ | ~~Second judge family for the judge-swap check~~ — **resolved 2026-08-17** by the M0 amendment: the judge is OpenAI, so `claude-haiku-4-5-20251001` is the M4 swap judge. Both backends are implemented and send identical prompts. | ~~M4~~ |

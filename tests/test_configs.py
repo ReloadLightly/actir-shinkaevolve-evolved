@@ -78,9 +78,25 @@ BASELINES: List[str] = [
 #: Model ids not yet verified against Roland's accounts. Anything here will
 #: fail a real run on its first call, so it must be resolved before Stage C.
 #: Emptying this list is the fix; suppressing the test is not.
-UNVERIFIED_MODEL_IDS = {
-    "gpt-5.4",
-    "gemini-3-flash-preview",
+#:
+#: Emptied 2026-08-17: the ensemble was re-picked onto verified GPT-4.1 ids.
+#: `gpt-5.4` was previously listed here as a placeholder — that was wrong, it is
+#: a real model, but it rejects `temperature` and so cannot join an ensemble
+#: that varies it. `gemini-3-flash-preview` was dropped for want of a Google key.
+UNVERIFIED_MODEL_IDS: set = set()
+
+#: Models whose price and temperature behaviour were checked on 2026-08-17.
+#: Every GPT-5-series model is excluded on purpose: the whole series rejects
+#: `temperature`, and both the judge (RESEARCH_DESIGN 2.2, temperature 0) and
+#: the ensemble (llm_kwargs.temperatures) depend on sending it.
+KNOWN_GOOD_MODEL_IDS = {
+    "gpt-4.1",
+    "gpt-4.1-2025-04-14",
+    "gpt-4.1-mini",
+    "gpt-4.1-mini-2025-04-14",
+    "gpt-4.1-nano",
+    "gpt-4.1-nano-2025-04-14",
+    "claude-haiku-4-5-20251001",   # M4 judge-swap only, never a mutator
 }
 
 
@@ -365,17 +381,11 @@ def test_every_model_id_is_either_known_good_or_declared_unverified(configs):
     the placeholders to be gone — that is the next test, which is expected to
     fail until Roland supplies ids his accounts can reach.
     """
-    known_good = {
-        "claude-opus-5",
-        "claude-sonnet-5",
-        "claude-haiku-4-5-20251001",
-        "gpt-4.1-2025-04-14",
-    }
     undeclared: Dict[str, List[str]] = {}
     for name, config in configs.items():
         loose = sorted({
             m for m in _models_in(config)
-            if m not in known_good and m not in UNVERIFIED_MODEL_IDS
+            if m not in KNOWN_GOOD_MODEL_IDS and m not in UNVERIFIED_MODEL_IDS
         })
         if loose:
             undeclared[name] = loose
@@ -386,19 +396,9 @@ def test_every_model_id_is_either_known_good_or_declared_unverified(configs):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN BLOCKER, pending decision 2 in docs/DECISIONS.md: the mutation "
-        "ensemble still names placeholder model ids that will fail on the "
-        "first call of a real run. Needs ids Roland's accounts can reach. "
-        "strict=True means this test flips the suite red the moment the ids "
-        "are fixed, so the marker cannot be left behind."
-    ),
-)
 def test_no_unverified_model_ids_remain(configs):
     """Placeholder ids fail on the first mutation call, after the run has
-    started and the ceiling clock is running. Blocks Stage C, not M1."""
+    started and the ceiling clock is running."""
     found: Dict[str, List[str]] = {}
     for name, config in configs.items():
         bad = sorted({m for m in _models_in(config) if m in UNVERIFIED_MODEL_IDS})
@@ -409,3 +409,57 @@ def test_no_unverified_model_ids_remain(configs):
         f"run: {found}. Replace them with ids Roland's accounts can reach, "
         "then remove them from UNVERIFIED_MODEL_IDS."
     )
+
+
+def test_no_model_anywhere_rejects_the_temperature_parameter(configs):
+    """The whole pipeline depends on sending `temperature`, in two places.
+
+    The judge needs temperature 0 (RESEARCH_DESIGN §2.2). The ensemble varies
+    temperature across [0.0, 0.5, 1.0] as its diversity mechanism. Every model
+    in the OpenAI GPT-5 series rejects the parameter outright, so one slipping
+    into a config would fail the run on its first call — after the ceiling
+    clock has started.
+    """
+    from judge.client import JudgeConfig as _JC
+
+    offenders: Dict[str, List[str]] = {}
+    for name, config in configs.items():
+        bad = sorted({
+            m for m in _models_in(config) if not _JC(model=m).sends_temperature
+        })
+        if bad:
+            offenders[name] = bad
+    assert not offenders, (
+        f"these models reject `temperature` and cannot be used here: "
+        f"{offenders}. The GPT-5 series and the Claude 5 family both removed "
+        "sampling parameters; GPT-4.1 is the newest OpenAI family that keeps them."
+    )
+
+
+def test_the_judge_itself_accepts_temperature(judge_model):
+    """If the judge silently stops sending temperature 0, the run is no longer
+    deterministic in the way the design intends, and nothing else would say so."""
+    from judge.client import JudgeConfig as _JC
+
+    assert _JC(model=judge_model).sends_temperature, (
+        f"judge {judge_model!r} rejects `temperature`, so the run would not be "
+        "deterministic (RESEARCH_DESIGN §2.2 requires temperature 0)"
+    )
+
+
+def test_the_ensemble_spans_more_than_one_price_tier(configs):
+    """RESEARCH_DESIGN §3 wants mixed tiers, and the bandit needs something to
+    choose between. `ensemble_single` is the ablation that removes this on
+    purpose, so it is exempt."""
+    from judge.client import PRICING_USD_PER_MTOK as PRICES
+
+    for name, config in configs.items():
+        if name == "ablations/ensemble_single.yaml":
+            continue
+        tiers = {
+            PRICES[m]["input"] for m in _ensemble(config) if m in PRICES
+        }
+        assert len(tiers) > 1, (
+            f"{name} has a single-tier ensemble ({_ensemble(config)}); §3 asks "
+            "for mixed tiers and the UCB1 bandit has nothing to trade off"
+        )

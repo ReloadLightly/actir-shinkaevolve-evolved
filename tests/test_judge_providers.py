@@ -28,7 +28,7 @@ from judge.client import (
 from lowy import MEASURES
 
 ANTHROPIC = JudgeConfig(provider="anthropic", model="claude-haiku-4-5-20251001")
-OPENAI = JudgeConfig(provider="openai", model="gpt-5-mini")
+OPENAI = JudgeConfig(provider="openai", model="gpt-4.1-mini-2025-04-14")
 
 
 # --------------------------------------------------------------------------
@@ -38,7 +38,7 @@ OPENAI = JudgeConfig(provider="openai", model="gpt-5-mini")
 
 @pytest.mark.parametrize("provider,model", [
     ("anthropic", "claude-haiku-4-5-20251001"),
-    ("openai", "gpt-5-mini"),
+    ("openai", "gpt-4.1-mini-2025-04-14"),
 ])
 def test_real_mode_refuses_without_authorization(provider, model):
     client = JudgeClient(JudgeConfig(
@@ -50,7 +50,7 @@ def test_real_mode_refuses_without_authorization(provider, model):
 
 @pytest.mark.parametrize("provider,model", [
     ("anthropic", "claude-haiku-4-5-20251001"),
-    ("openai", "gpt-5-mini"),
+    ("openai", "gpt-4.1-mini-2025-04-14"),
 ])
 def test_authorization_alone_is_not_enough_without_real_mode(provider, model):
     """mode: mock with stage_b_authorized: true must still make no call."""
@@ -63,7 +63,7 @@ def test_authorization_alone_is_not_enough_without_real_mode(provider, model):
 
 @pytest.mark.parametrize("provider,model", [
     ("anthropic", "claude-haiku-4-5-20251001"),
-    ("openai", "gpt-5-mini"),
+    ("openai", "gpt-4.1-mini-2025-04-14"),
 ])
 def test_mock_mode_never_calls_either_backend(provider, model, monkeypatch):
     def explode(*_a, **_k):
@@ -160,10 +160,16 @@ def test_response_schema_is_openai_strict_compatible():
 
 
 @pytest.mark.parametrize("model,expected", [
-    ("gpt-5-mini", True),
+    # GPT-4.1 family: the newest OpenAI family that still accepts temperature.
     ("gpt-4.1", True),
-    ("gpt-5-nano", True),
+    ("gpt-4.1-mini-2025-04-14", True),
+    ("gpt-4.1-nano", True),
     ("claude-haiku-4-5-20251001", True),
+    # The whole GPT-5 series dropped sampling parameters, as Claude 5 did.
+    ("gpt-5.4", False),
+    ("gpt-5.4-mini", False),
+    ("gpt-5.4-nano", False),
+    ("gpt-5.5", False),
     ("o3", False),
     ("o4-mini", False),
     ("claude-opus-5", False),
@@ -180,11 +186,25 @@ def test_temperature_is_sent_only_to_models_that_accept_it(model, expected):
 # --------------------------------------------------------------------------
 
 
-def test_the_paper_s_own_judge_tier_is_priced():
-    """RESEARCH_DESIGN section 2.2 names these three; a cost ceiling cannot be
-    checked against a model with no price."""
-    for model in ("gpt-5-nano", "gpt-5-mini", "gpt-4.1"):
+def test_the_usable_judge_tier_is_priced():
+    """A cost ceiling cannot be checked against a model with no price.
+
+    RESEARCH_DESIGN §2.2 named "gpt-5-nano / gpt-4.1 / gpt-5-mini" as the
+    paper's judge tier. Only the GPT-4.1 family survives contact with the 2026
+    lineup: those two GPT-5 ids never existed under those names, and every
+    model in the series that replaced them rejects `temperature`, which §2.2
+    requires. So the GPT-4.1 tiers are the judge tier now.
+    """
+    for model in ("gpt-4.1", "gpt-4.1-mini-2025-04-14", "gpt-4.1-nano"):
         assert model in PRICING_USD_PER_MTOK
+
+
+def test_no_fictional_gpt5_ids_crept_back_into_the_price_table():
+    """An earlier revision priced `gpt-5-mini` / `gpt-5-nano` / `gpt-5` from
+    memory. None of them exist; a price entry for one would let an unusable
+    model pass the preflight's price check."""
+    for model in ("gpt-5-mini", "gpt-5-nano", "gpt-5"):
+        assert model not in PRICING_USD_PER_MTOK
 
 
 def test_unknown_pricing_is_flagged_not_silently_free(monkeypatch):
@@ -210,7 +230,7 @@ def test_unknown_pricing_is_flagged_not_silently_free(monkeypatch):
 
 def test_known_pricing_is_flagged_and_computed(monkeypatch):
     client = JudgeClient(JudgeConfig(
-        mode=REAL, provider="openai", model="gpt-5-mini", stage_b_authorized=True,
+        mode=REAL, provider="openai", model="gpt-4.1-mini-2025-04-14", stage_b_authorized=True,
     ))
     monkeypatch.setattr(
         JudgeClient, "_call_openai",
@@ -222,7 +242,7 @@ def test_known_pricing_is_flagged_and_computed(monkeypatch):
     )
     payload = client._call_api("S1", "scenario", "rubric", {})
     assert payload["pricing_known"] is True
-    rates = PRICING_USD_PER_MTOK["gpt-5-mini"]
+    rates = PRICING_USD_PER_MTOK["gpt-4.1-mini-2025-04-14"]
     assert payload["cost_usd"] == pytest.approx(rates["input"] + rates["output"])
 
 
@@ -241,7 +261,7 @@ def test_openai_payload_parses_into_a_verdict(monkeypatch):
         ),
     )
     client = JudgeClient(JudgeConfig(
-        mode=REAL, provider="openai", model="gpt-5-mini", stage_b_authorized=True,
+        mode=REAL, provider="openai", model="gpt-4.1-mini-2025-04-14", stage_b_authorized=True,
     ))
     payload = client._call_api("S3", "scenario", "rubric", {})
     verdict = client._verdict_from_payload("S3", "key", payload)
@@ -258,7 +278,7 @@ def test_unparseable_response_raises_rather_than_scoring_zero(monkeypatch):
                                               "output_tokens": 1}, "stop", "r"),
     )
     client = JudgeClient(JudgeConfig(
-        mode=REAL, provider="openai", model="gpt-5-mini", stage_b_authorized=True,
+        mode=REAL, provider="openai", model="gpt-4.1-mini-2025-04-14", stage_b_authorized=True,
     ))
     with pytest.raises(RuntimeError, match="unparseable JSON"):
         client._call_api("S1", "scenario", "rubric", {})

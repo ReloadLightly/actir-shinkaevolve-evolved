@@ -41,10 +41,8 @@ evo_config:
   # Mutation ensemble: 4 models, mixed tiers, temperatures [0.0, 0.5, 1.0].
   # The judge model must NOT appear here (KICKOFF hard rule 2).
   llm_models:
-    - "claude-opus-5"
-    - "claude-sonnet-5"
-    - "gpt-5.4"
-    - "gemini-3-flash-preview"
+    - "gpt-4.1"
+    - "gpt-4.1-nano"
   llm_kwargs:
     temperatures: [0.0, 0.5, 1.0]
     max_tokens: 32768
@@ -54,7 +52,7 @@ evo_config:
 
   meta_rec_interval: 10
   meta_max_recommendations: 5
-  meta_llm_models: ["claude-haiku-4-5-20251001"]
+  meta_llm_models: ["gpt-4.1-nano"]
   meta_llm_kwargs:
     temperatures: [0.0]
 

@@ -10,14 +10,17 @@
 # for the amendment and docs/JUDGE_MODEL_NOTE.md for the reasoning.
 #
 # A dated snapshot, so genuinely pinned rather than a floating alias that could
-# be repointed mid-experiment. It accepts temperature 0, which the reasoning
-# tiers of both families do not. Changing it is a new experiment, not an edit.
+# be repointed mid-experiment. It accepts temperature 0 -- the ENTIRE OpenAI
+# GPT-5 series rejects that parameter, so GPT-4.1 is the newest family that can
+# serve as the judge at all. The -mini tier costs a fifth of gpt-4.1 and is
+# squarely the "cheap, frozen, boring" tier RESEARCH_DESIGN 2.2 asks for.
+# Changing it is a new experiment, not an edit.
 
 mode: mock                              # mock | real
 stage_b_authorized: false               # Roland flips this at the Stage B gate
 
 provider: openai                        # anthropic | openai (both implemented)
-model: gpt-4.1-2025-04-14               # dated snapshot = genuinely pinned
+model: gpt-4.1-mini-2025-04-14          # dated snapshot = genuinely pinned
 temperature: 0.0
 max_tokens: 2000
 
