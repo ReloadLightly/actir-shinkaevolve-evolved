@@ -20,6 +20,46 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
+#: `shinka` on PyPI is an unrelated image-upscaling package by a different
+#: author. Installing it gets you something that imports cleanly, provides
+#: `shinka.core`, and has nothing whatever to do with SakanaAI's ShinkaEvolve.
+#: The real engine must come from the git URL in requirements.txt.
+_IMPOSTOR_HINT = (
+    "A package named 'shinka' is installed but does not provide "
+    "shinka.core.run_shinka_eval.\n"
+    "  PyPI 'shinka' is an unrelated IMAGE-UPSCALING package, not ShinkaEvolve.\n"
+    "  Falling back to the local harness, which is equivalent for evaluation.\n"
+    "  For the real engine:  pip uninstall -y shinka && "
+    "pip install git+https://github.com/SakanaAI/ShinkaEvolve.git"
+)
+
+
+def shinka_is_real() -> bool:
+    """True only when the installed `shinka` is actually ShinkaEvolve.
+
+    Distinguishes the real engine from the identically-named PyPI package, so
+    a silent fallback can never be mistaken for a real run.
+    """
+    try:
+        import shinka.core as core  # noqa: WPS433
+    except Exception:  # noqa: BLE001
+        return False
+    return callable(getattr(core, "run_shinka_eval", None))
+
+
+def _warn_if_impostor_shinka() -> None:
+    """Say so loudly when a wrong-but-importable `shinka` is present.
+
+    Without this the fallback is silent, and silence here is the dangerous
+    kind: the run completes, the numbers look normal, and you believe the real
+    engine produced them.
+    """
+    import importlib.util as _util
+
+    if _util.find_spec("shinka") is not None and not shinka_is_real():
+        print(_IMPOSTOR_HINT)
+
+
 def load_program(program_path: str) -> Any:
     """Load an evolved program by file path (same semantics as ShinkaEvolve)."""
     spec = importlib.util.spec_from_file_location("program", program_path)
@@ -100,6 +140,7 @@ def run_eval(
     try:
         from shinka.core import run_shinka_eval
     except Exception:  # noqa: BLE001 - ShinkaEvolve absent is a supported mode
+        _warn_if_impostor_shinka()
         return _run_local(
             program_path=program_path,
             results_dir=results_dir,

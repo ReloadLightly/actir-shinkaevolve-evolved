@@ -7,12 +7,12 @@ projected Lowy Asia Power Index composite in 2030. The third experiment of
 **Authoritative spec: [`RESEARCH_DESIGN.md`](RESEARCH_DESIGN.md). Build stages
 and hard rules: [`KICKOFF.md`](KICKOFF.md).**
 
-Status: **Stage A complete, M0 approved, M1 inputs ready** (2026-08-17) —
-API-free foundation, 179 tests green, no network call possible. The five M1
-portfolios (December 2022 plus four rival schools) are written and pass the
-gate. Scenarios and rubric are approved but deliberately still `DRAFT`; they
-freeze after the M1 smoke test. Stage B — the first real judge calls, ~$0.04 —
-needs an explicit go and an `OPENAI_API_KEY`. See
+Status: **M1 run #1 complete — rubric corrected, awaiting re-approval** (2026-08-17) —
+196 tests green. **The evolution loop now runs end to end offline** — 301 evaluations, $0.00, via a surrogate judge and programmatic mutation (`scripts/offline_evolution.py`), with the analysis layer built on its output. M1 ran for **$0.1869** and
+found the rubric wanting: judge agreement −0.300, and the composite spread
+across five opposite doctrines (0.70) smaller than the disagreement between two
+judges (0.92). Rubric revision 2 addresses it; scenarios unchanged. See
+[`docs/M1_FINDINGS.md`](docs/M1_FINDINGS.md). The next step is a 3-call re-test (~$0.006), not a search. See
 [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/BUDGET.md`](docs/BUDGET.md)
 and [`docs/API_KEYS.md`](docs/API_KEYS.md).
 
@@ -29,7 +29,7 @@ both backends are implemented and send byte-identical prompts.
 
 ```bash
 pip install -r requirements.txt
-pytest -q                                    # 179 tests, no network
+pytest -q                                    # 196 tests, no network
 
 # Score the December 2022 seed portfolio with the mock judge
 python tasks/japan_fp/evaluate.py \
@@ -59,9 +59,38 @@ tasks/japan_fp/
 configs/            # judge.yaml, pilot.yaml (20 gens), main.yaml (30), ablations/ + baselines
 scripts/freeze.py         # re-record frozen hashes under a new version
 scripts/m1_calibration.py # the M1 table: 5 portfolios x 3 scenarios
-tests/              # Stage A tests + the seed and M1-harness tests
+analysis/           # archive_analysis.py -> report.md + SVG figures (example/ has output)
+tests/              # Stage A tests + seeds, M1 harness, configs, offline pipeline
 docs/               # DECISIONS.md, BUDGET.md, RUN_M1_LOCALLY.md, API_KEYS.md, ...
 ```
+
+## Running things
+
+**Everything below is free and offline. Nothing here calls an API.**
+
+```bash
+pytest -q                                                    # 196 tests
+python scripts/offline_evolution.py --generations 300         # the full loop, $0.00
+python analysis/archive_analysis.py                           # figures + report
+python tasks/japan_fp/run_evo.py --config_path configs/pilot.yaml --dry-run
+```
+
+**The one thing that does cost money** lives behind a single GitHub page:
+
+> **https://github.com/ReloadLightly/actir-shinkaevolve-evolved/actions/workflows/m1-calibration.yml**
+
+That page shows only the M1 workflow. The **"Run workflow"** button is on the
+right, above the run list. It drops down four inputs:
+
+| Input | Use |
+|---|---|
+| `run_mode` | `estimate` costs nothing and checks the key. `real_compare` spends. |
+| `portfolios` | `accommodation` = 3 calls ≈ $0.006. `all` = 15 calls ≈ $0.038. |
+| `compare` | `no` = one judge. `yes` = both judges + rank correlation, 5× the cost. |
+| `confirm_spend` | Must be exactly `RUN_M1`, or the run refuses. |
+
+The result table is printed to the run's **Summary** page — no digging through
+logs. Nothing else in the repository can spend money.
 
 ## The M1 calibration test
 

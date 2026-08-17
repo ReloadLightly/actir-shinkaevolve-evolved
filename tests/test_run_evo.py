@@ -231,3 +231,65 @@ def test_the_mutation_prompt_is_carried_into_every_config(tmp_path):
         "configs/pilot.yaml", seed=0, write_manifest=False
     )
     assert config["evo_config"]["task_sys_msg"] == run_evo.TASK_SYS_MSG
+
+
+# --------------------------------------------------------------------------
+# The identically-named-package trap
+# --------------------------------------------------------------------------
+
+
+def test_shinka_is_real_rejects_a_module_without_the_entry_point(monkeypatch):
+    """`shinka` on PyPI is an unrelated image-upscaling package.
+
+    It imports cleanly and even provides `shinka.core`, so a naive
+    `pip install shinka` yields something that looks installed and is not. The
+    check must key on the entry point, not on the module existing.
+    """
+    import sys as _sys
+    import types
+
+    from _eval_harness import shinka_is_real
+
+    fake = types.ModuleType("shinka")
+    fake_core = types.ModuleType("shinka.core")   # present, but no run_shinka_eval
+    monkeypatch.setitem(_sys.modules, "shinka", fake)
+    monkeypatch.setitem(_sys.modules, "shinka.core", fake_core)
+    assert shinka_is_real() is False
+
+    fake_core.run_shinka_eval = lambda **_kw: None
+    assert shinka_is_real() is True
+
+
+def test_the_impostor_warning_names_the_actual_problem(monkeypatch, capsys):
+    """A silent fallback is the dangerous kind: the run completes, the numbers
+    look normal, and you believe the real engine produced them."""
+    import _eval_harness
+
+    monkeypatch.setattr(_eval_harness, "shinka_is_real", lambda: False)
+    _eval_harness._warn_if_impostor_shinka()
+    out = capsys.readouterr().out
+    if out:                     # only warns when some `shinka` is importable
+        assert "IMAGE-UPSCALING" in out
+        assert "SakanaAI/ShinkaEvolve" in out
+
+
+def test_run_evo_refuses_the_real_path_without_the_real_engine(monkeypatch, capsys):
+    """Better a named refusal than an ImportError three frames deep."""
+    import _eval_harness
+
+    monkeypatch.setattr(_eval_harness, "shinka_is_real", lambda: False)
+    with pytest.raises(SystemExit) as excinfo:
+        run_evo.main("configs/pilot.yaml", seed=0, dry_run=False)
+    assert "ShinkaEvolve is not installed" in str(excinfo.value)
+
+
+def test_dry_run_still_works_without_the_engine():
+    """The whole point of --dry-run: validate a config on a machine that has
+    never had ShinkaEvolve installed."""
+    result = subprocess.run(
+        [sys.executable, str(TASK_DIR / "run_evo.py"),
+         "--config_path", "configs/main.yaml", "--dry-run"],
+        capture_output=True, text=True, timeout=120, cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "DRY RUN" in result.stdout

@@ -153,11 +153,12 @@ def preflight(config: JudgeConfig) -> bool:
     return ok
 
 
-def estimate(config: JudgeConfig) -> None:
-    calls = len(PORTFOLIOS) * len(evaluator.SCENARIO_IDS)
+def estimate(config: JudgeConfig, only: Optional[List[str]] = None) -> None:
+    n_portfolios = len([p for p in PORTFOLIOS if p[0] in set(only)]) if only else len(PORTFOLIOS)
+    calls = n_portfolios * len(evaluator.SCENARIO_IDS)
     rates = PRICING_USD_PER_MTOK.get(config.model)
     print(f"M1 would make {calls} judge calls "
-          f"({len(PORTFOLIOS)} portfolios x {len(evaluator.SCENARIO_IDS)} scenarios).")
+          f"({n_portfolios} portfolios x {len(evaluator.SCENARIO_IDS)} scenarios).")
     print(f"Judge: {config.provider} / {config.model}")
     if rates is None:
         print(f"No price table for {config.model!r}; cannot estimate.")
@@ -176,9 +177,28 @@ def estimate(config: JudgeConfig) -> None:
 # --------------------------------------------------------------------------
 
 
-def score_all(client: JudgeClient) -> List[Dict[str, Any]]:
+def score_all(
+    client: JudgeClient, only: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    """Score the portfolios. ``only`` restricts to the named keys.
+
+    Restricting is how a rubric correction gets tested cheaply: the M1 run of
+    2026-08-17 cost $0.19, but the question it raised — does Accommodation show
+    any scenario sensitivity — is answerable with three calls.
+    """
+    selected = PORTFOLIOS
+    if only:
+        known = {key for key, _label, _path in PORTFOLIOS}
+        unknown = sorted(set(only) - known)
+        if unknown:
+            raise SystemExit(
+                f"--only: unknown portfolio key(s) {unknown}. "
+                f"Known keys: {sorted(known)}"
+            )
+        selected = tuple(p for p in PORTFOLIOS if p[0] in set(only))
+
     rows: List[Dict[str, Any]] = []
-    for key, label, path in PORTFOLIOS:
+    for key, label, path in selected:
         if not path.is_file():
             raise FileNotFoundError(f"missing seed program: {path}")
         portfolio = load_portfolio(path)
@@ -515,6 +535,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--real", action="store_true",
                         help="require a real judge; refuses if the config is mock "
                              "or Stage B is not authorized")
+    parser.add_argument("--only", metavar="KEY", action="append", default=None,
+                        help="score only these portfolios, by key "
+                             "(dec_2022, status_quo_plus, autonomous_rearmament, "
+                             "accommodation, middle_power). Repeatable. Use it to "
+                             "test a rubric correction for a fraction of the cost: "
+                             "--only accommodation is 3 calls, about $0.006.")
     parser.add_argument("--compare-with", metavar="MODEL", default=None,
                         help="also score everything with a second judge and "
                              "report the rank correlation. Answers 'is the cheap "
@@ -525,11 +551,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     config = JudgeConfig.load(args.judge_config)
 
     if args.estimate:
-        estimate(config)
+        estimate(config, only=args.only)
         if args.compare_with:
             print()
             print(f"--compare-with {args.compare_with}: doubles the call count.")
-            estimate(replace(config, model=args.compare_with))
+            estimate(replace(config, model=args.compare_with), only=args.only)
         print()
         preflight(config)
         if args.compare_with:
@@ -579,7 +605,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     print()
 
     client = JudgeClient(config)
-    rows = score_all(client)
+    rows = score_all(client, only=args.only)
 
     print()
     print("Composite by scenario")
@@ -605,7 +631,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print("\nSkipping the comparison: preflight failed for "
                   f"{other_config.model}.", file=sys.stderr)
         else:
-            other_rows = score_all(JudgeClient(other_config))
+            other_rows = score_all(JudgeClient(other_config), only=args.only)
             other_cost = sum(r["public"]["judge_cost_usd"] for r in other_rows)
             print()
             print(compare_report(rows, other_rows, config.model, other_config.model))

@@ -15,6 +15,22 @@ on:
         description: "For real_compare, type exactly RUN_M1"
         required: false
         type: string
+      portfolios:
+        description: "Which portfolios (cheapest first). 'accommodation' is 3 calls, ~$0.006."
+        required: true
+        default: accommodation
+        type: choice
+        options:
+          - accommodation
+          - all
+      compare:
+        description: "Also score with gpt-4.1 and report rank correlation (5x the cost)"
+        required: true
+        default: "no"
+        type: choice
+        options:
+          - "no"
+          - "yes"
 
 permissions:
   contents: read
@@ -63,13 +79,31 @@ jobs:
           fi
           echo "OPENAI_API_KEY is available to this workflow."
 
+      - name: Build calibration arguments
+        id: args
+        run: |
+          ARGS=""
+          if [ "${{ inputs.portfolios }}" != "all" ]; then
+            ARGS="$ARGS --only ${{ inputs.portfolios }}"
+          fi
+          if [ "${{ inputs.compare }}" = "yes" ]; then
+            ARGS="$ARGS --compare-with gpt-4.1-2025-04-14"
+          fi
+          echo "args=$ARGS" >> "$GITHUB_OUTPUT"
+          echo "Calibration arguments:$ARGS"
+
       - name: Estimate M1 cost
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python scripts/m1_calibration.py \
-            --estimate \
-            --compare-with gpt-4.1-2025-04-14
+          python scripts/m1_calibration.py --estimate ${{ steps.args.outputs.args }} \
+            | tee estimate.txt
+          {
+            echo "## M1 cost estimate"
+            echo '```'
+            cat estimate.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Confirm real-call authorization
         if: ${{ inputs.run_mode == 'real_compare' }}
@@ -88,10 +122,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p runs/m1
-          python scripts/m1_calibration.py \
-            --real \
-            --compare-with gpt-4.1-2025-04-14 \
+          python scripts/m1_calibration.py --real ${{ steps.args.outputs.args }} \
             2>&1 | tee runs/m1/console.txt
+
+      - name: Publish the table to the run summary
+        if: ${{ inputs.run_mode == 'real_compare' }}
+        run: |
+          {
+            echo "## M1 calibration result"
+            echo '```'
+            cat runs/m1/console.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve M1 evidence
         if: always()
