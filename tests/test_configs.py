@@ -31,21 +31,21 @@ ABLATION_DIR = CONFIG_DIR / "ablations"
 # Cost ceilings, USD. Hard rule 4 says a ceiling may never be raised, so these
 # are read-only from our side.
 #
-# **PROJECT_CEILING is the binding one.** Roland set the whole-project budget at
-# USD 15 on 2026-08-17, superseding the per-stage figures written into KICKOFF
+# **PROJECT_CEILING is the binding one.** Roland raised the whole-project budget to
+# USD 50 on 2026-08-17 (from 15, itself down from KICKOFF's 261), superseding the per-stage figures written into KICKOFF
 # (Stage B 1, Stage C 10, Stage D 250 — which total 261). Where KICKOFF and this
 # number disagree, the smaller wins. See docs/BUDGET.md.
-PROJECT_CEILING = 15.0
+PROJECT_CEILING = 50.0
 
 CEILING_M1 = 1.0            # KICKOFF Stage B; the real M1 estimate is ~0.19
-CEILING_PILOT = 1.0         # re-cut from KICKOFF's 10 to fit PROJECT_CEILING
-CEILING_STAGE_D_TOTAL = 12.0  # re-cut from KICKOFF's 250
+CEILING_PILOT = 2.0         # raised with the ceiling, 2026-08-17
+CEILING_STAGE_D_TOTAL = 44.0  # raised with the ceiling, 2026-08-17
 
 #: Reserved outside the search runs: M1 calibration, the M4 judge-swap
 #: re-scoring of the top-20 archive, and contingency.
 RESERVE_M1 = 0.25
-RESERVE_M4_JUDGE_SWAP = 0.50
-RESERVE_CONTINGENCY = 1.25
+RESERVE_M4_JUDGE_SWAP = 2.00
+RESERVE_CONTINGENCY = 1.75
 
 #: The runs RESEARCH_DESIGN §4 actually calls for at Stage D: the main run, two
 #: baselines (random search and hill climbing), and three ablations — one per

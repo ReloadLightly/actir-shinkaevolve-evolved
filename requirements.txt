@@ -10,6 +10,10 @@ pytest>=8.0
 #
 #   pip install git+https://github.com/SakanaAI/ShinkaEvolve.git
 #
+# VERIFIED 2026-08-17: installed from that URL, and all nine run configs
+# construct EvolutionConfig/DatabaseConfig/LocalJobConfig cleanly against it.
+# The engine integration is no longer an unknown.
+#
 # DO NOT `pip install shinka`. That name on PyPI belongs to an unrelated
 # IMAGE-UPSCALING package by a different author. It imports cleanly and even
 # provides a `shinka.core`, so it looks installed and is not — the harness would
