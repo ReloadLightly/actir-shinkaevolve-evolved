@@ -23,7 +23,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import yaml
 
@@ -109,16 +109,28 @@ def write_run_manifest(
         print("  NOTE: judge is in MOCK mode - every portfolio will score 38.8475.")
 
 
-def main(config_path: str, seed: int) -> None:
-    from shinka.core import EvolutionConfig, ShinkaEvolveRunner
-    from shinka.database import DatabaseConfig
-    from shinka.launch import LocalJobConfig
+def prepare_run(
+    config_path: str, seed: int, write_manifest: bool = True
+) -> Tuple[Path, Dict[str, Any], Path]:
+    """Load the config, resolve paths, seed the RNG, write the manifest.
 
+    Deliberately free of any ShinkaEvolve import, for two reasons: the
+    provenance guarantee (KICKOFF hard rule 5) is then testable without the
+    engine installed, and ``--dry-run`` can validate a config on a machine that
+    has never had ShinkaEvolve on it. Everything that can be checked before the
+    engine starts is checked here.
+    """
     path = Path(config_path)
     if not path.is_absolute():
         path = REPO_ROOT / path
+    if not path.is_file():
+        raise FileNotFoundError(f"no such config: {path}")
     with path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
+
+    for section in ("evo_config", "db_config"):
+        if section not in config:
+            raise KeyError(f"{path.name} has no {section!r} section")
 
     random.seed(seed)
     os.environ.setdefault("PYTHONHASHSEED", str(seed))
@@ -127,11 +139,34 @@ def main(config_path: str, seed: int) -> None:
     config["evo_config"]["task_sys_msg"] = TASK_SYS_MSG
     results_dir = REPO_ROOT / config["evo_config"].get("results_dir", "runs/unnamed")
     config["evo_config"]["results_dir"] = str(results_dir)
-    config["evo_config"]["init_program_path"] = str(
-        REPO_ROOT / config["evo_config"]["init_program_path"]
-    )
 
-    write_run_manifest(path, config, results_dir, seed)
+    init_program = REPO_ROOT / config["evo_config"]["init_program_path"]
+    if not init_program.is_file():
+        raise FileNotFoundError(f"seed program does not exist: {init_program}")
+    config["evo_config"]["init_program_path"] = str(init_program)
+
+    if write_manifest:
+        write_run_manifest(path, config, results_dir, seed)
+    return path, config, results_dir
+
+
+def main(config_path: str, seed: int, dry_run: bool = False) -> None:
+    path, config, results_dir = prepare_run(config_path, seed)
+
+    if dry_run:
+        evo = config["evo_config"]
+        print("DRY RUN — the engine is not started and nothing is spent.")
+        print(f"  config:      {path.relative_to(REPO_ROOT)}")
+        print(f"  generations: {evo['num_generations']}")
+        print(f"  ceiling:     ${evo['max_api_costs']:.2f}")
+        print(f"  ensemble:    {evo.get('llm_models')}")
+        print(f"  seed program:{evo['init_program_path']}")
+        print(f"  results:     {results_dir}")
+        return
+
+    from shinka.core import EvolutionConfig, ShinkaEvolveRunner
+    from shinka.database import DatabaseConfig
+    from shinka.launch import LocalJobConfig
 
     runner = ShinkaEvolveRunner(
         evo_config=EvolutionConfig(**config["evo_config"]),
@@ -152,5 +187,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evolve Japanese foreign policy.")
     parser.add_argument("--config_path", type=str, default="configs/pilot.yaml")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--dry-run", action="store_true",
+                        help="load the config, write the manifest, print what "
+                             "would run, and stop. Needs no ShinkaEvolve and "
+                             "spends nothing.")
     args = parser.parse_args()
-    main(args.config_path, args.seed)
+    main(args.config_path, args.seed, dry_run=args.dry_run)
