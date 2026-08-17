@@ -75,7 +75,18 @@ python analysis/archive_analysis.py                           # figures + report
 python tasks/japan_fp/run_evo.py --config_path configs/pilot.yaml --dry-run
 ```
 
-**The one thing that does cost money** lives behind a single GitHub page:
+**Two pages can spend money, and nothing else can.**
+
+**Preflight** — everything that must pass before the pilot, ~$0.06 in one click:
+
+> **https://github.com/ReloadLightly/actir-shinkaevolve-evolved/actions/workflows/preflight.yml**
+
+Leave `confirm_spend` blank for a free estimate. Type `RUN_PREFLIGHT` to make
+the calls. Four independently switchable probes: judge determinism, genotype
+observability, the rubric-v2 scenario-sensitivity re-test, and whether the
+mutation ensemble can produce a valid portfolio at all.
+
+**M1 calibration** — the five-doctrine table:
 
 > **https://github.com/ReloadLightly/actir-shinkaevolve-evolved/actions/workflows/m1-calibration.yml**
 

@@ -1,0 +1,215 @@
+name: Preflight — everything that must pass before the pilot
+
+# One dispatch that answers every open question needing a real API call.
+# Total ~12 calls, ~$0.06. Each stage is independently switchable, and every
+# result is published to the run's Summary page rather than buried in logs.
+#
+# The four questions, all currently unanswered:
+#
+#   determinism    Is the judge actually deterministic at temperature 0? The
+#                  content-hash cache and the phrase "frozen judge" both depend
+#                  on it, and it has never been tested.
+#   observability  Does the judge use phases, initiatives and the defence path,
+#                  or is ~40% of mutation spend invisible to fitness?
+#   rubric_v2      Did the M1 rubric correction fix scenario sensitivity? Tested
+#                  on Accommodation alone, the doctrine that most depends on it.
+#   mutation       Can the ensemble models actually emit a portfolio the gate
+#                  accepts? The mutation path has never made a single call, and
+#                  it is the half that spends the money.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_spend:
+        description: "Type exactly RUN_PREFLIGHT to permit real calls. Leave blank for a free estimate."
+        required: false
+        default: ""
+        type: string
+      determinism:
+        description: "Judge determinism — 3 calls, ~$0.008"
+        required: true
+        default: true
+        type: boolean
+      observability:
+        description: "Does the judge see phases/initiatives/defence path — 4 calls, ~$0.015"
+        required: true
+        default: true
+        type: boolean
+      rubric_v2:
+        description: "Did the rubric fix scenario sensitivity — 3 calls, ~$0.006"
+        required: true
+        default: true
+        type: boolean
+      mutation:
+        description: "Can the ensemble produce a valid portfolio — 2 calls, ~$0.036"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      JAPAN_FP_JUDGE_CONFIG: configs/judge.local.yaml
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt openai
+
+      - name: Offline test suite must pass first
+        run: python -m pytest -q
+
+      - name: Verify the secret is available
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "OPENAI_API_KEY repository secret is missing or empty."
+            exit 1
+          fi
+          echo "OPENAI_API_KEY is available."
+
+      - name: Free cost estimate
+        run: |
+          {
+            echo "## Cost estimate"
+            echo '```'
+            python scripts/preflight_probes.py --estimate --probe all
+            echo
+            python scripts/mutation_smoke.py --estimate
+            echo
+            python scripts/m1_calibration.py --estimate --only accommodation
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          python scripts/preflight_probes.py --estimate --probe all
+          python scripts/mutation_smoke.py --estimate
+
+      - name: Gate on typed confirmation
+        id: gate
+        env:
+          CONFIRM: ${{ inputs.confirm_spend }}
+        run: |
+          if [ "$CONFIRM" = "RUN_PREFLIGHT" ]; then
+            echo "spend=yes" >> "$GITHUB_OUTPUT"
+            echo "Confirmed. Real calls will be made."
+          else
+            echo "spend=no" >> "$GITHUB_OUTPUT"
+            echo "No confirmation given — estimate only, nothing spent."
+            echo "### Estimate only — nothing was spent" >> "$GITHUB_STEP_SUMMARY"
+            echo "Re-run with \`confirm_spend\` set to \`RUN_PREFLIGHT\` to make the calls." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Arm the judge locally
+        if: steps.gate.outputs.spend == 'yes'
+        run: cp configs/judge.local.yaml.example configs/judge.local.yaml
+
+      - name: Probe — judge determinism
+        if: steps.gate.outputs.spend == 'yes' && inputs.determinism
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -o pipefail
+          python scripts/preflight_probes.py --probe determinism 2>&1 | tee det.txt
+          { echo "## Judge determinism"; echo '```'; cat det.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Probe — genotype observability
+        if: steps.gate.outputs.spend == 'yes' && inputs.observability
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -o pipefail
+          python scripts/preflight_probes.py --probe observability 2>&1 | tee obs.txt
+          { echo "## Genotype observability"; echo '```'; cat obs.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Probe — rubric revision 2 scenario sensitivity
+        if: steps.gate.outputs.spend == 'yes' && inputs.rubric_v2
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -o pipefail
+          mkdir -p runs/m1
+          python scripts/m1_calibration.py --real --only accommodation 2>&1 | tee rub.txt
+          {
+            echo "## Rubric v2 — Accommodation across S1/S2/S3"
+            echo
+            echo "Run #1 gave Accommodation a scenario spread of **0.19**, the smallest of"
+            echo "the five, and scored it worse under S3 than S2 — backwards. If the"
+            echo "correction worked, the spread should be visibly larger and S3 should"
+            echo "no longer be its worst scenario."
+            echo '```'; cat rub.txt; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Probe — can the ensemble mutate
+        if: steps.gate.outputs.spend == 'yes' && inputs.mutation
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -o pipefail
+          python scripts/mutation_smoke.py --run 2>&1 | tee mut.txt
+          { echo "## Mutation ensemble"; echo '```'; cat mut.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Total spend
+        if: always() && steps.gate.outputs.spend == 'yes'
+        run: |
+          python - <<'PY' | tee spend.txt
+          import json, pathlib
+          total = 0.0
+          led = pathlib.Path("runs/ledger/judge_calls.jsonl")
+          calls = 0
+          if led.is_file():
+              for line in led.read_text().splitlines():
+                  if line.strip():
+                      entry = json.loads(line)
+                      total += float(entry.get("cost_usd", 0.0))
+                      calls += 1
+          mut = pathlib.Path("runs/mutation_smoke/mutation_smoke.json")
+          if mut.is_file():
+              total += float(json.loads(mut.read_text()).get("spent_usd", 0.0))
+          print(f"Judge calls this run: {calls}")
+          print(f"Total spent this run: ${total:.4f}")
+          print("Project budget: $15.00, of which $0.1869 was spent by M1 run #1.")
+          PY
+          { echo "## Spend"; echo '```'; cat spend.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve all evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            runs/probes/
+            runs/m1/
+            runs/mutation_smoke/
+            runs/ledger/
+            tasks/japan_fp/judge/cache/
+            det.txt
+            obs.txt
+            rub.txt
+            mut.txt
