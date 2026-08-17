@@ -37,15 +37,47 @@ from lowy import DELTA_MAX, DELTA_MIN, MEASURES
 MOCK = "mock"
 REAL = "real"
 
-#: Per-million-token list prices, USD. Checked 2026-08-17 against the Claude
-#: pricing table. The ledger records the rate it used, so a later price change
-#: does not silently rewrite the cost history of an earlier run.
+#: Per-million-token list prices, USD. Anthropic rows checked 2026-08-17
+#: against the Claude pricing table; OpenAI rows checked 2026-08-17 against
+#: published pricing pages. An earlier revision of this table carried
+#: `gpt-5-mini` / `gpt-5-nano` / `gpt-5` from memory — those ids do not exist;
+#: the 2026 lineup is the GPT-5.4/5.5/5.6 series.
+#:
+#: The ledger records the rate it used, so a later price change does not
+#: silently rewrite the cost history of an earlier run, and a wrong list price
+#: is recoverable after the fact rather than lost.
 PRICING_USD_PER_MTOK: Dict[str, Dict[str, float]] = {
+    # Anthropic
     "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
     "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
     "claude-sonnet-5": {"input": 3.00, "output": 15.00},
     "claude-opus-5": {"input": 5.00, "output": 25.00},
+    # OpenAI, GPT-4.1 family — these still accept `temperature`
+    "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
+    "gpt-4.1-nano-2025-04-14": {"input": 0.10, "output": 0.40},
+    "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+    "gpt-4.1-mini-2025-04-14": {"input": 0.40, "output": 1.60},
+    "gpt-4.1": {"input": 2.00, "output": 8.00},
+    "gpt-4.1-2025-04-14": {"input": 2.00, "output": 8.00},
+    # OpenAI, GPT-5 series — priced here for completeness, but every one of
+    # them rejects `temperature` (see no_sampling_params), so none can serve as
+    # the judge and none can join an ensemble that varies temperature.
+    "gpt-5.4-nano": {"input": 0.20, "output": 1.25},
+    "gpt-5.4-mini": {"input": 0.75, "output": 4.50},
+    "gpt-5.4": {"input": 2.50, "output": 15.00},
+    "gpt-5.5": {"input": 5.00, "output": 30.00},
 }
+
+#: Environment variable each provider's SDK reads its key from. Used only for
+#: a local preflight check — the value is never read, only its presence.
+PROVIDER_KEY_ENV: Dict[str, str] = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+}
+
+#: Providers with an implemented backend. Anything else is refused before the
+#: network is touched, so a typo in a config cannot become a silent no-op.
+SUPPORTED_PROVIDERS: Tuple[str, ...] = ("anthropic", "openai")
 
 
 @dataclass(frozen=True)
@@ -69,12 +101,23 @@ class JudgeConfig:
     cache_dir: str = "tasks/japan_fp/judge/cache"
     ledger_path: str = "runs/ledger/judge_calls.jsonl"
     #: Models that reject the `temperature` parameter outright (HTTP 400).
+    #: Matched by prefix, so "gpt-5" covers the whole 5.x series.
+    #:
+    #: Two families independently removed sampling parameters: Claude 5, and
+    #: **the entire OpenAI GPT-5 series** — OpenAI dropped temperature control
+    #: there to avoid injecting randomness into reasoning chains. That is why
+    #: the judge is a GPT-4.1 model: RESEARCH_DESIGN 2.2 requires temperature 0,
+    #: and GPT-4.1 is the newest OpenAI family that still accepts it.
     no_sampling_params: Tuple[str, ...] = (
         "claude-opus-5",
         "claude-sonnet-5",
         "claude-fable-5",
         "claude-opus-4-8",
         "claude-opus-4-7",
+        "gpt-5",
+        "o1",
+        "o3",
+        "o4",
     )
 
     @classmethod
@@ -305,25 +348,29 @@ class JudgeClient:
             )
         if not self.config.model:
             raise RuntimeError("Refusing to make a real judge call: no model pinned.")
-        if self.config.provider != "anthropic":
+        if self.config.provider not in SUPPORTED_PROVIDERS:
             raise RuntimeError(
                 f"provider {self.config.provider!r} has no implemented backend; "
-                "only 'anthropic' is wired up. Choosing the judge model is an M0 "
-                "decision (RESEARCH_DESIGN section 8)."
+                f"supported: {', '.join(SUPPORTED_PROVIDERS)}. Choosing the judge "
+                "model is an M0 decision (RESEARCH_DESIGN section 8)."
             )
 
     # -- the one place that touches the network ----------------------------
 
-    def _call_api(
+    def _user_content(
         self,
         scenario_id: str,
         scenario_text: str,
         prompt_text: str,
         portfolio: Mapping[str, Any],
-    ) -> Dict[str, Any]:
-        import anthropic  # imported here: Stage A never needs the dependency
+    ) -> str:
+        """The one prompt string, identical across providers.
 
-        user_content = (
+        Both backends send exactly this, so a judge-swap comparison
+        (RESEARCH_DESIGN section 4) differs only in the model, never in what
+        the model was asked.
+        """
+        return (
             f"{prompt_text}\n\n"
             f"## Scenario {scenario_id}\n\n{scenario_text}\n\n"
             "## Portfolio under assessment (JSON)\n\n"
@@ -332,6 +379,49 @@ class JudgeClient:
             "```\n\n"
             "Return one delta and one mechanism sentence per Lowy measure."
         )
+
+    def _call_api(
+        self,
+        scenario_id: str,
+        scenario_text: str,
+        prompt_text: str,
+        portfolio: Mapping[str, Any],
+    ) -> Dict[str, Any]:
+        user_content = self._user_content(
+            scenario_id, scenario_text, prompt_text, portfolio
+        )
+        if self.config.provider == "openai":
+            text, usage, stop_reason, response_id = self._call_openai(user_content)
+        else:
+            text, usage, stop_reason, response_id = self._call_anthropic(user_content)
+
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"judge returned unparseable JSON for scenario {scenario_id}: {exc}\n"
+                f"{text[:500]}"
+            ) from exc
+
+        return {
+            "scenario_id": scenario_id,
+            "judge": self.config.identity(),
+            "request_user_content_sha256": _sha256(user_content),
+            "request_user_content": user_content,
+            "response_text": text,
+            "parsed": parsed,
+            "usage": usage,
+            "cost_usd": self._cost(usage),
+            "pricing_known": self.config.model in PRICING_USD_PER_MTOK,
+            "stop_reason": stop_reason,
+            "response_id": response_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _call_anthropic(
+        self, user_content: str
+    ) -> Tuple[str, Dict[str, int], Any, Any]:
+        import anthropic  # imported here: Stage A never needs the dependency
 
         request: Dict[str, Any] = {
             "model": self.config.model,
@@ -349,37 +439,75 @@ class JudgeClient:
 
         if response.stop_reason == "refusal":
             raise RuntimeError(
-                f"judge refused to score scenario {scenario_id}: "
-                f"{getattr(response, 'stop_details', None)}"
+                f"judge refused to score: {getattr(response, 'stop_details', None)}"
             )
         if response.stop_reason == "max_tokens":
             raise RuntimeError(
-                f"judge response truncated for scenario {scenario_id}; "
-                f"raise max_tokens above {self.config.max_tokens}"
+                "judge response truncated; raise max_tokens above "
+                f"{self.config.max_tokens}"
             )
 
         text = next((b.text for b in response.content if b.type == "text"), "")
-        parsed = json.loads(text)
-
         usage = {
             "input_tokens": int(getattr(response.usage, "input_tokens", 0) or 0),
             "output_tokens": int(getattr(response.usage, "output_tokens", 0) or 0),
         }
-        return {
-            "scenario_id": scenario_id,
-            "judge": self.config.identity(),
-            "request_user_content_sha256": _sha256(user_content),
-            "request_user_content": user_content,
-            "response_text": text,
-            "parsed": parsed,
-            "usage": usage,
-            "cost_usd": self._cost(usage),
-            "stop_reason": response.stop_reason,
-            "response_id": getattr(response, "id", None),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+        return text, usage, response.stop_reason, getattr(response, "id", None)
+
+    def _call_openai(
+        self, user_content: str
+    ) -> Tuple[str, Dict[str, int], Any, Any]:
+        """Chat Completions with a strict json_schema response format.
+
+        Deliberately the older, stable surface rather than the Responses API:
+        the judge must stay reproducible across the life of the experiment, and
+        this endpoint has been stable since structured outputs shipped.
+        """
+        import openai  # imported here: Stage A never needs the dependency
+
+        request: Dict[str, Any] = {
+            "model": self.config.model,
+            "max_completion_tokens": self.config.max_tokens,
+            "messages": [{"role": "user", "content": user_content}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "lowy_measure_deltas",
+                    "schema": RESPONSE_SCHEMA,
+                    "strict": True,
+                },
+            },
         }
+        if self.config.sends_temperature:
+            request["temperature"] = self.config.temperature
+
+        client = openai.OpenAI()
+        response = client.chat.completions.create(**request)
+
+        choice = response.choices[0]
+        finish_reason = choice.finish_reason
+        if finish_reason == "content_filter":
+            raise RuntimeError("judge response was filtered")
+        if finish_reason == "length":
+            raise RuntimeError(
+                "judge response truncated; raise max_tokens above "
+                f"{self.config.max_tokens}"
+            )
+        refusal = getattr(choice.message, "refusal", None)
+        if refusal:
+            raise RuntimeError(f"judge refused to score: {refusal}")
+
+        text = choice.message.content or ""
+        usage_obj = response.usage
+        usage = {
+            "input_tokens": int(getattr(usage_obj, "prompt_tokens", 0) or 0),
+            "output_tokens": int(getattr(usage_obj, "completion_tokens", 0) or 0),
+        }
+        return text, usage, finish_reason, getattr(response, "id", None)
 
     def _cost(self, usage: Mapping[str, int]) -> float:
+        """USD for one call. Unknown models cost 0.0 *and* set pricing_known
+        false, so an unpriced model shows up as a gap rather than as free."""
         rates = PRICING_USD_PER_MTOK.get(self.config.model)
         if rates is None:
             return 0.0
@@ -414,10 +542,12 @@ class JudgeClient:
             "timestamp": payload.get("created_at"),
             "cache_key": key,
             "scenario_id": scenario_id,
+            "provider": self.config.provider,
             "model": self.config.model,
             "prompt_version": self.config.prompt_version,
             "usage": payload.get("usage", {}),
             "cost_usd": payload.get("cost_usd", 0.0),
+            "pricing_known": payload.get("pricing_known", False),
             "pricing_usd_per_mtok": PRICING_USD_PER_MTOK.get(self.config.model),
         }
         with self.ledger_path.open("a", encoding="utf-8") as handle:

@@ -28,8 +28,8 @@ db_config:
 evo_config:
   patch_types: [diff, full, cross]
   patch_type_probs: [0.6, 0.3, 0.1]
-  num_generations: 150
-  max_api_costs: 40.0                 # KICKOFF hard rule 4: per-run share of the USD 250 total
+  num_generations: 30
+  max_api_costs: 2.00                  # USD 15 project ceiling (docs/BUDGET.md)
   max_patch_resamples: 3
   max_patch_attempts: 1
   max_novelty_attempts: 1
@@ -41,10 +41,8 @@ evo_config:
   # Mutation ensemble: 4 models, mixed tiers, temperatures [0.0, 0.5, 1.0].
   # The judge model must NOT appear here (KICKOFF hard rule 2).
   llm_models:
-    - "claude-opus-5"
-    - "claude-sonnet-5"
-    - "gpt-5.4"
-    - "gemini-3-flash-preview"
+    - "gpt-4.1"
+    - "gpt-4.1-nano"
   llm_kwargs:
     temperatures: [0.0, 0.5, 1.0]
     max_tokens: 32768
@@ -54,7 +52,7 @@ evo_config:
 
   meta_rec_interval: 10
   meta_max_recommendations: 5
-  meta_llm_models: ["claude-haiku-4-5-20251001"]
+  meta_llm_models: ["gpt-4.1-nano"]
   meta_llm_kwargs:
     temperatures: [0.0]
 

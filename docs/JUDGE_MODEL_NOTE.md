@@ -1,8 +1,29 @@
 # Note for M0: "temperature 0" constrains which judge models are available
 
-**Status: DECIDED at M0, 2026-08-17 — `claude-haiku-4-5-20251001` at
-temperature 0.0 (docs/DECISIONS.md). This note is retained as the rationale:
-it records the constraint the choice was made under.**
+**Status: DECIDED at M0, then AMENDED the same day. The judge is
+`gpt-4.1-mini-2025-04-14` at temperature 0.0 (provider `openai`); the M0 choice of
+`claude-haiku-4-5-20251001` is now the M4 judge-swap model. See
+`DECISIONS.md`. This note is retained as the rationale: it records the
+constraint both choices were made under, and that constraint did not
+change.**
+
+**What the amendment did not change:** the requirement that the judge take
+`temperature: 0`, that it be pinned to a dated snapshot rather than a floating
+alias, that it support structured outputs, and that it be excluded from the
+mutation ensemble. The OpenAI choice satisfies all four, and RESEARCH_DESIGN
+§2.2 names `gpt-4.1` among the paper's own judge tier — so it is the design's
+precedent rather than a substitute for it.
+
+**What it did change:** the cost line below is now the Anthropic figure, i.e.
+the M4 swap. M1 on `gpt-4.1-mini-2025-04-14` estimates at **~$0.04**. Run
+`--estimate` for the current figure.
+
+**The constraint generalised.** This note was written about Claude 5 dropping
+sampling parameters. The OpenAI GPT-5 series did the same, for the same stated
+reason — not destabilising reasoning chains. So "temperature 0" now rules out
+the frontier tier of *both* families, and GPT-4.1 is the newest OpenAI family
+that can serve as this judge at all. The note's argument was not provider-
+specific; it was about where the industry went.
 
 ---
 

@@ -7,17 +7,29 @@ projected Lowy Asia Power Index composite in 2030. The third experiment of
 **Authoritative spec: [`RESEARCH_DESIGN.md`](RESEARCH_DESIGN.md). Build stages
 and hard rules: [`KICKOFF.md`](KICKOFF.md).**
 
-Status: **Stage A complete, M0 approved** (2026-08-17) — API-free foundation,
-43 tests green, no network call possible. Scenarios and rubric are approved but
-deliberately still `DRAFT`; they freeze after the M1 smoke test. Stage B (the
-first real judge calls) needs an explicit go and an API key. See
-[`docs/DECISIONS.md`](docs/DECISIONS.md).
+Status: **Stage A complete, M0 approved, M1 inputs ready** (2026-08-17) —
+API-free foundation, 144 tests green, no network call possible. The five M1
+portfolios (December 2022 plus four rival schools) are written and pass the
+gate. Scenarios and rubric are approved but deliberately still `DRAFT`; they
+freeze after the M1 smoke test. Stage B — the first real judge calls, ~$0.04 —
+needs an explicit go and an `OPENAI_API_KEY`. See
+[`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/BUDGET.md`](docs/BUDGET.md)
+and [`docs/API_KEYS.md`](docs/API_KEYS.md).
+
+**Budget: USD 15 for the whole project**, superseding KICKOFF's per-stage
+figures. Enforced as `PROJECT_CEILING` in `tests/test_configs.py`.
+
+The judge is `gpt-4.1-mini-2025-04-14` at temperature 0 — a dated snapshot in
+the GPT-4.1 family, which is the newest OpenAI family that still accepts
+`temperature` at all. The mutation ensemble is `gpt-4.1` + `gpt-4.1-nano`.
+`claude-haiku-4-5-20251001` is the M4 judge-swap model from a different family;
+both backends are implemented and send byte-identical prompts.
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
-pytest -q                                    # 43 tests, no network
+pytest -q                                    # 144 tests, no network
 
 # Score the December 2022 seed portfolio with the mock judge
 python tasks/japan_fp/evaluate.py \
@@ -40,14 +52,32 @@ tasks/japan_fp/
   evaluate.py       # Stage 1 validity gate -> Stage 2 frozen judge -> Lowy aggregation
   run_evo.py        # ShinkaEvolve wiring + run provenance manifest
   judge/client.py   # frozen judge: MOCK by default, content-hash cache, cost ledger
+  seeds/            # the four rival-school portfolios for M1 (see seeds/README.md)
   scenarios/        # S1-S3 vignettes            [M0-approved, freezes after M1]
   judge_prompt.md   # anchored delta rubric      [M0-approved, freezes after M1]
   FROZEN.json       # recorded hashes of the four frozen files
-configs/            # judge.yaml, pilot.yaml (30 gens), main.yaml (150), ablations/
-scripts/freeze.py   # re-record frozen hashes under a new version
-tests/              # the four Stage A tests
-docs/               # DECISIONS.md, JUDGE_MODEL_NOTE.md, OPEN_QUESTIONS.md
+configs/            # judge.yaml, pilot.yaml (20 gens), main.yaml (30), ablations/ + baselines
+scripts/freeze.py         # re-record frozen hashes under a new version
+scripts/m1_calibration.py # the M1 table: 5 portfolios x 3 scenarios
+tests/              # Stage A tests + the seed and M1-harness tests
+docs/               # DECISIONS.md, BUDGET.md, API_KEYS.md, JUDGE_MODEL_NOTE.md, OPEN_QUESTIONS.md
 ```
+
+## The M1 calibration test
+
+The next gate. Five portfolios — December 2022 plus four rival schools that
+genuinely disagree (autonomous rearmament, accommodation, status-quo-plus,
+middle-power internationalism) — scored across all three scenarios, producing
+one table you read to decide whether the rubric is plausible enough to freeze.
+
+```bash
+python scripts/m1_calibration.py              # mock: 0 calls, $0, proves the harness
+python scripts/m1_calibration.py --estimate   # ~$0.04, and preflights the key
+python scripts/m1_calibration.py --real       # refuses unless Stage B is authorized
+```
+
+Each seed is aimed at a specific rubric rule, so a miscalibrated rubric fails
+visibly rather than quietly — see [`tasks/japan_fp/seeds/README.md`](tasks/japan_fp/seeds/README.md).
 
 ## How fitness works
 
@@ -81,8 +111,10 @@ These are enforced in code, not by convention:
 
 - **No real LLM call is possible** until `configs/judge.yaml` has *both*
   `mode: real` and `stage_b_authorized: true`. Either alone raises.
-- **The judge is never in the mutation ensemble** — check any config in
-  `configs/`.
+- **The judge is never in the mutation ensemble**, and no model that rejects
+  `temperature` appears in any config. `tests/test_configs.py` enforces both.
+- **The project cannot authorise more than USD 15.** `PROJECT_CEILING` sums
+  every ceiling that could be spent and fails if they exceed the budget.
 - **Frozen files cannot be edited in place.** `tests/test_frozen_files.py` goes
   red if `scenarios/` or `judge_prompt.md` changes without
   `python scripts/freeze.py --version <new>`.
