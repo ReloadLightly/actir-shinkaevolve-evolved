@@ -540,3 +540,102 @@ def test_the_local_template_is_gitignored_once_copied():
     assert "configs/judge.local.yaml" in gitignore, (
         "an armed local config could be committed by accident"
     )
+
+
+# --------------------------------------------------------------------------
+# The archive must be a map, not a leaderboard (docs/ALPHAEVOLVE_COMPARISON.md)
+# --------------------------------------------------------------------------
+
+
+#: The only criterion names ShinkaEvolve's _get_criterion_value can resolve.
+#: Everything else returns 0.0 with a log warning, which would silently add a
+#: constant term to the rank normalisation rather than failing loudly.
+RESOLVABLE_ARCHIVE_CRITERIA = {
+    "combined_score", "loc", "lloc", "complexity", "maintainability", "nesting",
+}
+
+
+def test_archive_criteria_name_only_metrics_shinka_can_resolve(configs):
+    """A criterion the engine cannot resolve is worse than no criterion.
+
+    `_get_criterion_value` special-cases `combined_score` and reads the five
+    code-analysis metrics from program metadata. It never touches
+    `public_metrics`. An unrecognised name returns 0.0 and logs a warning, so a
+    plausible-looking `archive_criteria: {worst_case_composite: 0.5}` would
+    contribute a constant to every program's rank and quietly distort selection
+    while appearing to add diversity pressure.
+
+    This test exists because that is exactly the mistake I made and shipped to
+    a branch before it caught me.
+    """
+    for name, config in configs.items():
+        criteria = config.get("db_config", {}).get("archive_criteria", {})
+        assert criteria, f"{name} declares no archive_criteria"
+        unresolvable = sorted(set(criteria) - RESOLVABLE_ARCHIVE_CRITERIA)
+        assert not unresolvable, (
+            f"{name} names {unresolvable} in archive_criteria; ShinkaEvolve "
+            f"resolves only {sorted(RESOLVABLE_ARCHIVE_CRITERIA)} and returns "
+            "0.0 for anything else"
+        )
+        assert "combined_score" in criteria, (
+            f"{name} dropped the borrowed objective from archive selection"
+        )
+
+
+def test_archive_criteria_are_identical_across_configs(configs):
+    """Otherwise an ablation differs from main in its own mechanism AND in how
+    the archive is kept, and the comparison attributes nothing."""
+    reference = configs["main.yaml"]["db_config"]["archive_criteria"]
+    for name, config in configs.items():
+        assert config["db_config"]["archive_criteria"] == reference, (
+            f"{name} keeps its archive differently from main.yaml"
+        )
+
+
+def test_the_behaviour_descriptors_the_archive_needs_are_public():
+    """`archive_criteria` ranks over PUBLIC metrics only. A descriptor left in
+    `private` is invisible to archive selection, which is where the effort
+    shares used to sit."""
+    import sys as _sys
+
+    task_dir = REPO_ROOT / "tasks" / "japan_fp"
+    if str(task_dir) not in _sys.path:
+        _sys.path.insert(0, str(task_dir))
+    import evaluate as evaluator
+    import initial
+    from judge.client import JudgeClient, JudgeConfig
+    from lowy import MEASURES
+
+    result = evaluator.score_portfolio(
+        initial.build_policy(), client=JudgeClient(JudgeConfig(mode="surrogate"))
+    )
+    public = result["public"]
+    assert "effort_concentration" in public
+    for measure in MEASURES:
+        assert f"effort_{measure}" in public, f"effort_{measure} is not public"
+
+    # The descriptors stay public even though archive_criteria cannot read
+    # them: analysis/novelty.py and analysis/shinka_adapter.py both do, and
+    # they are what turns a finished archive into a map.
+
+
+def test_effort_concentration_is_a_real_herfindahl_index():
+    """1/30 for a perfectly even split, 1.0 for everything on one dial. If the
+    scale were wrong the archive's diversity pressure would be meaningless."""
+    import sys as _sys
+
+    task_dir = REPO_ROOT / "tasks" / "japan_fp"
+    if str(task_dir) not in _sys.path:
+        _sys.path.insert(0, str(task_dir))
+    from lowy import DIALS
+    from schema import PolicyPortfolio
+
+    even = PolicyPortfolio(horizon=(2026, 2030))
+    for dial in DIALS:
+        even.invest(dial, share=1.0 / len(DIALS), how="x")
+    concentrated = PolicyPortfolio(horizon=(2026, 2030))
+    concentrated.invest(DIALS[0], share=1.0, how="x")
+
+    h = lambda p: sum(d.share ** 2 for d in p.dials.values())  # noqa: E731
+    assert h(even) == pytest.approx(1.0 / len(DIALS), abs=1e-9)
+    assert h(concentrated) == pytest.approx(1.0)

@@ -304,6 +304,18 @@ def score_portfolio(
         "judge_surrogate": any(v.surrogate for v in verdicts),
         "judge_cost_usd": round(sum(v.cost_usd for v in verdicts), 6),
         "dials_used": sum(1 for d in portfolio.dials.values() if d.share > 0),
+        # --- behaviour descriptors --------------------------------------
+        # Public on purpose. ShinkaEvolve's `archive_criteria` is a weighted,
+        # rank-normalised dict over PUBLIC metrics, and its database "supports
+        # MAP-Elites style feature-based organization" — but only over metrics
+        # it can see. Leaving the effort shape in `private` meant the archive
+        # could select on nothing but the judge's score, which is precisely the
+        # quantity M1 showed to be unreliable (effect 0.696 < noise 0.921).
+        # Exposed here, the archive can be told to spread across the shape of a
+        # portfolio rather than to converge on a ranking we do not trust.
+        "effort_concentration": round(
+            sum(d.share ** 2 for d in portfolio.dials.values()), 6
+        ),  # Herfindahl over the 30 dials: 1/30 = perfectly even, 1.0 = all-in
         "custom_initiatives": len(portfolio.initiatives),
         "defence_gdp_2030": portfolio.defence_path.get(2030),
     }
@@ -311,6 +323,8 @@ def score_portfolio(
         public[f"composite_{scenario_id}"] = round(value, 4)
     for measure, value in mean_deltas.items():
         public[f"mean_delta_{measure}"] = round(value, 4)
+    for measure, value in portfolio.share_by_measure().items():
+        public[f"effort_{measure}"] = round(value, 6)
 
     private: Dict[str, Any] = {
         "per_scenario_deltas": {v.scenario_id: v.deltas for v in verdicts},

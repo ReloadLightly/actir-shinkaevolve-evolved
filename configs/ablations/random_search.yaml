@@ -42,6 +42,13 @@ db_config:
   parent_selection_lambda: 10
   archive_selection_strategy: "crowding"
   island_selection_strategy: equal
+  # ShinkaEvolve's _get_criterion_value resolves ONLY combined_score and the
+  # code-analysis metrics (loc, lloc, complexity, maintainability, nesting).
+  # It never reads public_metrics, and an unrecognised name silently returns
+  # 0.0 with a log warning — so naming a task metric here would add a constant
+  # term to the rank normalisation and quietly distort archive selection.
+  # Illumination therefore happens in analysis/novelty.py, post hoc over the
+  # finished archive, not in selection. See docs/ALPHAEVOLVE_COMPARISON.md.
   archive_criteria:
     combined_score: 1.0
   enable_dynamic_islands: false
