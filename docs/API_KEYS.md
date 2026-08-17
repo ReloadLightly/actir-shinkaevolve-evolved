@@ -22,18 +22,32 @@ OpenAI backend alongside the Anthropic one, because §4's judge-swap check
 needs a second model family regardless of what M1 uses. Both send byte-identical
 prompts, so a swap differs in the model and nothing else.
 
-**Which judge M1 uses is an open decision**, because it reopens an M0 approval:
+**Decided 2026-08-17: the judge is OpenAI `gpt-4.1-2025-04-14`.** So:
 
-- **Anthropic `claude-haiku-4-5-20251001`** — what M0 approved. Dated snapshot,
-  so genuinely pinned. Needs `ANTHROPIC_API_KEY`.
-- **OpenAI `gpt-5-mini` or `gpt-4.1`** — RESEARCH_DESIGN §2.2 names the paper's
-  own judge tier as "gpt-5-nano / gpt-4.1 / gpt-5-mini at temperature 0", so
-  this is *closer to the design's precedent*, not a substitute for it. Needs
-  `OPENAI_API_KEY`. Changing it means amending the M0 record in
-  `DECISIONS.md`.
+- **M1 needs `OPENAI_API_KEY`.** 15 calls, ~$0.19 against a $1 ceiling.
+- **M4 needs `ANTHROPIC_API_KEY`** for the judge-swap check against
+  `claude-haiku-4-5-20251001`, a different model family per §4.
 
-Either way M1 is ~15 calls and cents. Whichever is not chosen becomes the M4
-swap judge, so both keys are eventually wanted — just not at the same gate.
+Both keys are eventually wanted, just not at the same gate.
+
+## Check before you authorize
+
+`--estimate` now preflights everything checkable without making a call:
+
+```bash
+python scripts/m1_calibration.py --estimate
+```
+
+```
+Preflight
+  [ok] OPENAI_API_KEY is set
+  [ok] gpt-4.1-2025-04-14 has a price entry
+  [ok] temperature 0.0 will be sent (deterministic, per RESEARCH_DESIGN 2.2)
+  [--] mode=mock, stage_b_authorized=False  (locked: no real call possible)
+```
+
+An armed run whose preflight fails refuses to start rather than dying partway
+through having already spent money.
 
 **Verify the OpenAI prices before spending.** The OpenAI rows in
 `PRICING_USD_PER_MTOK` are from memory and flagged as unverified in the code.

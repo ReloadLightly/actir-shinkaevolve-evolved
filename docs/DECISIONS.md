@@ -60,6 +60,60 @@ an explicit go in chat *and* an API key in the environment.
 
 ---
 
+## M0 amendment — judge switched to the OpenAI tier, 2026-08-17
+
+**Roland chose the OpenAI judge**, amending the M0 decision recorded above.
+The M0 row for "Judge model" is superseded by this one; nothing else in the M0
+approval changes.
+
+| | Was (M0) | Now (M0 amended) |
+|---|---|---|
+| Provider | `anthropic` | `openai` |
+| Model | `claude-haiku-4-5-20251001` | `gpt-4.1-2025-04-14` |
+| Temperature | 0.0 | 0.0 |
+
+**Why this is not a retreat from the M0 reasoning.** RESEARCH_DESIGN §2.2
+names the paper's own judge tier explicitly: "they used gpt-5-nano / gpt-4.1 /
+gpt-5-mini at temperature 0". The OpenAI tier is therefore the design's own
+precedent, and `gpt-4.1` is named in it. The M0 choice of Haiku was made under
+a constraint — that temperature 0 rules out the frontier Claude tier — and
+that constraint is satisfied identically here.
+
+**Why `gpt-4.1-2025-04-14` specifically**, among the three §2.2 names:
+
+1. **It is a dated snapshot.** `JUDGE_MODEL_NOTE.md` argued that genuine
+   pinning matters more than the model choice itself, because a floating alias
+   can be repointed mid-experiment and silently break the pre-registration.
+   That argument survives the provider change and selects the snapshot form
+   over `gpt-5-mini`.
+2. **It certainly accepts `temperature: 0`.** It is not a reasoning tier, so
+   the design's determinism requirement is met literally rather than
+   approximated. The reasoning tiers of both families reject the parameter.
+3. **It certainly supports strict structured outputs**, so the 8 deltas and 8
+   mechanism sentences stay schema-enforced rather than parsed out of prose.
+
+**Cost.** ~$0.19 for M1 at 15 calls, against the $1 ceiling. Higher than the
+Haiku figure ($0.11) because gpt-4.1 is a mid tier rather than a cheap one;
+still far inside every ceiling in KICKOFF, and the content-hash cache means
+re-scoring an unchanged portfolio is free.
+
+**Two things to verify before spending**, both flagged in code and by
+`--estimate`:
+
+- The OpenAI price rows in `PRICING_USD_PER_MTOK` are from memory, not
+  checked against the account. The Anthropic rows were checked.
+- The exact snapshot id should be confirmed to resolve on your account. A bad
+  id fails loudly on the first call rather than producing anything wrong, so
+  this is a convenience check, not a safety one.
+
+**The M4 judge-swap check is now cleanly set up.** `claude-haiku-4-5-20251001`
+becomes the second judge from a different model family (RESEARCH_DESIGN §4).
+Both backends send byte-identical prompts, so the rank correlation measures
+judge agreement rather than prompt drift. Pending decision 3 is therefore
+resolved in passing.
+
+---
+
 ## M1 inputs built — 2026-08-17, no approval needed
 
 The four rival-school seeds and the calibration harness are written. This
@@ -89,6 +143,6 @@ opinion.
 
 | # | Decision | Needed by |
 |---|---|---|
-| 1 | Stage B go + an **`ANTHROPIC_API_KEY`** (ceiling USD 1; M1 estimated at $0.11). The judge is Anthropic per the M0 decision, so an OpenAI key does not unblock this — see `API_KEYS.md`. | before M1 |
+| 1 | Stage B go + an **`OPENAI_API_KEY` visible to the session** (ceiling USD 1; M1 estimated at $0.19). Confirm with `python scripts/m1_calibration.py --estimate`, which now preflights the key. | before M1 |
 | 2 | Review of the mutation-ensemble model list in `configs/*.yaml` — four models across mixed tiers, but your API access to each is unverified and two ids (`gpt-5.4`, `gemini-3-flash-preview`) are placeholders | before the pilot |
-| 3 | Second judge family for the judge-swap check (RESEARCH_DESIGN §4) | M4 |
+| ~~3~~ | ~~Second judge family for the judge-swap check~~ — **resolved 2026-08-17** by the M0 amendment: the judge is OpenAI, so `claude-haiku-4-5-20251001` is the M4 swap judge. Both backends are implemented and send identical prompts. | ~~M4~~ |

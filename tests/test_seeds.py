@@ -301,6 +301,56 @@ def test_m1_refuses_real_when_config_is_mock(tmp_path):
     assert code == 2
 
 
+def test_preflight_fails_when_the_provider_key_is_absent(monkeypatch, capsys):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    ok = m1_calibration.preflight(
+        JudgeConfig(provider="openai", model="gpt-4.1-2025-04-14")
+    )
+    assert ok is False
+    assert "OPENAI_API_KEY is NOT set" in capsys.readouterr().out
+
+
+def test_preflight_passes_when_the_key_is_present(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
+    assert m1_calibration.preflight(
+        JudgeConfig(provider="openai", model="gpt-4.1-2025-04-14")
+    ) is True
+
+
+def test_preflight_fails_on_an_unpriced_model(monkeypatch, capsys):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
+    ok = m1_calibration.preflight(
+        JudgeConfig(provider="openai", model="gpt-not-in-the-price-table")
+    )
+    assert ok is False
+    assert "no price entry" in capsys.readouterr().out
+
+
+def test_preflight_checks_the_key_for_whichever_provider_is_configured(monkeypatch, capsys):
+    """Switching provider must switch which key is checked, or the preflight
+    would pass on a key the run cannot use."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    ok = m1_calibration.preflight(
+        JudgeConfig(provider="anthropic", model="claude-haiku-4-5-20251001")
+    )
+    assert ok is False
+    assert "ANTHROPIC_API_KEY is NOT set" in capsys.readouterr().out
+
+
+def test_m1_refuses_to_start_an_armed_run_that_would_fail(tmp_path, monkeypatch):
+    """An armed config with no key must be stopped before the first call."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    config = tmp_path / "judge.yaml"
+    config.write_text(
+        "mode: real\nstage_b_authorized: true\nprovider: openai\n"
+        "model: gpt-4.1-2025-04-14\n",
+        encoding="utf-8",
+    )
+    code = m1_calibration.main(["--real", "--judge-config", str(config)])
+    assert code == 3, "an armed run with no key must refuse to start"
+
+
 def test_m1_estimate_stays_under_the_stage_b_ceiling(capsys):
     m1_calibration.estimate(JudgeConfig())
     out = capsys.readouterr().out

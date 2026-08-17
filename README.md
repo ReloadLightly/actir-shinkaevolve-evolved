@@ -8,12 +8,17 @@ projected Lowy Asia Power Index composite in 2030. The third experiment of
 and hard rules: [`KICKOFF.md`](KICKOFF.md).**
 
 Status: **Stage A complete, M0 approved, M1 inputs ready** (2026-08-17) —
-API-free foundation, 88 tests green, no network call possible. The five M1
+API-free foundation, 119 tests green, no network call possible. The five M1
 portfolios (December 2022 plus four rival schools) are written and pass the
 gate. Scenarios and rubric are approved but deliberately still `DRAFT`; they
-freeze after the M1 smoke test. Stage B — the first real judge calls, ~$0.11
-against a $1 ceiling — needs an explicit go and an `ANTHROPIC_API_KEY`. See
+freeze after the M1 smoke test. Stage B — the first real judge calls, ~$0.19
+against a $1 ceiling — needs an explicit go and an `OPENAI_API_KEY`. See
 [`docs/DECISIONS.md`](docs/DECISIONS.md) and [`docs/API_KEYS.md`](docs/API_KEYS.md).
+
+The judge is `gpt-4.1-2025-04-14` at temperature 0 — a dated snapshot, and one
+of the three models RESEARCH_DESIGN §2.2 names as the paper's own judge tier.
+`claude-haiku-4-5-20251001` is the M4 judge-swap model from a different family;
+both backends are implemented and send byte-identical prompts.
 
 ## Quick start
 

@@ -4,15 +4,20 @@
 # and makes no network call. Switching to `real` ALSO requires
 # stage_b_authorized: true. Both are needed; neither alone is enough.
 #
-# Judge model DECIDED at M0 on 2026-08-17 (docs/DECISIONS.md). A dated snapshot,
-# so genuinely pinned; it accepts temperature 0, which the Claude 5 tier does not.
-# Changing it is a new experiment, not an edit. See docs/JUDGE_MODEL_NOTE.md.
+# Judge model DECIDED at M0 (2026-08-17) and AMENDED the same day to the OpenAI
+# tier that RESEARCH_DESIGN section 2.2 names as the paper's own judge tier
+# ("gpt-5-nano / gpt-4.1 / gpt-5-mini at temperature 0"). See docs/DECISIONS.md
+# for the amendment and docs/JUDGE_MODEL_NOTE.md for the reasoning.
+#
+# A dated snapshot, so genuinely pinned rather than a floating alias that could
+# be repointed mid-experiment. It accepts temperature 0, which the reasoning
+# tiers of both families do not. Changing it is a new experiment, not an edit.
 
 mode: mock                              # mock | real
 stage_b_authorized: false               # Roland flips this at the Stage B gate
 
-provider: anthropic
-model: claude-haiku-4-5-20251001        # M0-decided; dated snapshot = genuinely pinned
+provider: openai                        # anthropic | openai (both implemented)
+model: gpt-4.1-2025-04-14               # dated snapshot = genuinely pinned
 temperature: 0.0
 max_tokens: 2000
 
@@ -20,3 +25,10 @@ prompt_version: draft-0                 # bump with any judge_prompt.md change
 
 cache_dir: tasks/japan_fp/judge/cache   # the cache is the audit trail
 ledger_path: runs/ledger/judge_calls.jsonl
+
+# The M4 judge-swap check (RESEARCH_DESIGN section 4) re-scores the top-20
+# archive with a different model family. That is the Anthropic side:
+#   provider: anthropic
+#   model: claude-haiku-4-5-20251001
+# Both backends send byte-identical prompts, so the swap differs in the model
+# and nothing else.

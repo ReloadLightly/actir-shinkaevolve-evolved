@@ -35,7 +35,14 @@ if str(TASK_DIR) not in sys.path:
     sys.path.insert(0, str(TASK_DIR))
 
 import evaluate as evaluator  # noqa: E402
-from judge.client import MOCK, REAL, PRICING_USD_PER_MTOK, JudgeClient, JudgeConfig  # noqa: E402
+from judge.client import (  # noqa: E402
+    MOCK,
+    PRICING_USD_PER_MTOK,
+    PROVIDER_KEY_ENV,
+    REAL,
+    JudgeClient,
+    JudgeConfig,
+)
 from lowy import BASELINE_2025, JAPAN_2025_COMPOSITE, MEASURES, WEIGHTS  # noqa: E402
 
 # The five portfolios, in the order the table reports them. The 2022 seed is
@@ -93,22 +100,69 @@ def load_portfolio(program_path: Path):
 # --------------------------------------------------------------------------
 
 
+def preflight(config: JudgeConfig) -> bool:
+    """Local-only readiness check. Reads no key value and makes no call.
+
+    Every failure here is one that would otherwise surface as a stack trace
+    partway through a run that has already spent money.
+    """
+    import os
+
+    ok = True
+    print("Preflight")
+
+    env_var = PROVIDER_KEY_ENV.get(config.provider)
+    if env_var is None:
+        print(f"  [!] provider {config.provider!r} has no known key variable")
+        ok = False
+    elif os.environ.get(env_var):
+        print(f"  [ok] {env_var} is set")
+    else:
+        print(f"  [!] {env_var} is NOT set — a real run would fail on the "
+              f"first call")
+        ok = False
+
+    if config.model in PRICING_USD_PER_MTOK:
+        print(f"  [ok] {config.model} has a price entry")
+    else:
+        print(f"  [!] {config.model} has no price entry; cost would be "
+              f"recorded as 0.00 and flagged pricing_known=false")
+        ok = False
+
+    if config.sends_temperature:
+        print(f"  [ok] temperature {config.temperature} will be sent "
+              f"(deterministic, per RESEARCH_DESIGN 2.2)")
+    else:
+        print(f"  [!] {config.model} rejects sampling parameters, so "
+              f"temperature will be OMITTED — the run would not be "
+              f"deterministic in the way the design intends")
+
+    print(f"  [--] mode={config.mode}, stage_b_authorized={config.stage_b_authorized}"
+          + ("  (locked: no real call possible)"
+             if config.mode == MOCK or not config.stage_b_authorized else
+             "  (ARMED: real calls will be made)"))
+    return ok
+
+
 def estimate(config: JudgeConfig) -> None:
     calls = len(PORTFOLIOS) * len(evaluator.SCENARIO_IDS)
     rates = PRICING_USD_PER_MTOK.get(config.model)
     print(f"M1 would make {calls} judge calls "
           f"({len(PORTFOLIOS)} portfolios x {len(evaluator.SCENARIO_IDS)} scenarios).")
+    print(f"Judge: {config.provider} / {config.model}")
     if rates is None:
         print(f"No price table for {config.model!r}; cannot estimate.")
         return
     cost = calls * (
         EST_INPUT_TOKENS * rates["input"] + EST_OUTPUT_TOKENS * rates["output"]
     ) / 1_000_000
-    print(f"Model: {config.model}")
     print(f"Assuming ~{EST_INPUT_TOKENS} in / ~{EST_OUTPUT_TOKENS} out per call "
           f"at ${rates['input']:.2f}/${rates['output']:.2f} per Mtok:")
     print(f"  estimated total: ${cost:.4f}   (KICKOFF Stage B ceiling: $1.00)")
     print("Cached calls cost nothing on a re-run.")
+    if config.provider == "openai":
+        print("NOTE: the OpenAI price rows are unverified (see client.py). "
+              "Confirm against your account before relying on this figure.")
 
 
 # --------------------------------------------------------------------------
@@ -354,6 +408,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.estimate:
         estimate(config)
+        print()
+        preflight(config)
         return 0
 
     if args.real and config.mode != REAL:
@@ -375,6 +431,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             file=sys.stderr,
         )
         return 2
+
+    if config.mode == REAL and config.stage_b_authorized:
+        # About to spend money. Catch a missing key or an unpriced model now,
+        # rather than partway through a run that has already made calls.
+        if not preflight(config):
+            print("\nRefusing to start: preflight failed. Fix the above first.",
+                  file=sys.stderr)
+            return 3
+        print()
 
     frozen = json.loads((TASK_DIR / "FROZEN.json").read_text(encoding="utf-8"))
     frozen_version = frozen.get("version", "unknown")
