@@ -60,10 +60,35 @@ an explicit go in chat *and* an API key in the environment.
 
 ---
 
+## M1 inputs built — 2026-08-17, no approval needed
+
+The four rival-school seeds and the calibration harness are written. This
+needed no decision from Roland and spent nothing: it is all API-free.
+
+| Item | What |
+|---|---|
+| `tasks/japan_fp/seeds/` | Four rival doctrines — autonomous rearmament, accommodation, status-quo-plus, middle-power internationalism — each a standalone program the evaluator loads exactly like an evolved individual. |
+| `scripts/m1_calibration.py` | Scores all five portfolios across all three scenarios and writes the KICKOFF Stage B table to `runs/m1/`. Estimated cost of a real run: **$0.11** against the $1 ceiling. |
+| `tests/test_seeds.py` | 45 tests, including that the four schools are materially distinct doctrines rather than variants of one position. |
+
+Each seed is aimed at a specific rubric rule so that a miscalibrated rubric
+fails visibly: accommodation tests scenario-sensitivity (rule 5),
+status-quo-plus tests the ±0.5 marginal anchor as the deliberate near-twin of
+December 2022, middle-power internationalism tests diminishing returns
+(rule 3), and autonomous rearmament tests score backfire (rule 2). The
+reasoning is in `tasks/japan_fp/seeds/README.md`.
+
+**The judge remains locked.** `mode: mock`, `stage_b_authorized: false`. The
+mock run produces 38.8475 for all five portfolios, which is correct and proves
+only the harness — the doctrines cannot separate until a real judge has an
+opinion.
+
+---
+
 ## Pending
 
 | # | Decision | Needed by |
 |---|---|---|
-| 1 | Stage B go + API key (ceiling USD 1) | before M1 |
-| 2 | Review of the mutation-ensemble model list in `configs/*.yaml` — four models across mixed tiers, but your API access to each is unverified | before the pilot |
+| 1 | Stage B go + an **`ANTHROPIC_API_KEY`** (ceiling USD 1; M1 estimated at $0.11). The judge is Anthropic per the M0 decision, so an OpenAI key does not unblock this — see `API_KEYS.md`. | before M1 |
+| 2 | Review of the mutation-ensemble model list in `configs/*.yaml` — four models across mixed tiers, but your API access to each is unverified and two ids (`gpt-5.4`, `gemini-3-flash-preview`) are placeholders | before the pilot |
 | 3 | Second judge family for the judge-swap check (RESEARCH_DESIGN §4) | M4 |

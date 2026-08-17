@@ -43,14 +43,18 @@ the list should be reviewed before the pilot.
 
 ## Not decided — genuinely needs you
 
-1. **Stage B authorization and an API key.** `configs/judge.yaml` ships with
-   `mode: mock` and `stage_b_authorized: false`; both must flip before any real
-   call. Offered at M0 and declined, so it stays locked. I will not change
-   either without you saying so in chat.
-2. **The four rival-school seeds for M1** (autonomous rearmament;
-   accommodation; status-quo-plus; middle-power internationalism). Writing them
-   needs no API access, but it is Stage B work and Stage B is not authorized,
-   so I have not started. Say the word and they take one pass.
+1. **Stage B authorization and an `ANTHROPIC_API_KEY`.** `configs/judge.yaml`
+   ships with `mode: mock` and `stage_b_authorized: false`; both must flip
+   before any real call. Offered at M0 and declined, so it stays locked. I will
+   not change either without you saying so in chat. Note the provider: the
+   judge is Anthropic, so an OpenAI key does not unblock M1. See
+   `API_KEYS.md`.
+2. ~~**The four rival-school seeds for M1.**~~ **Done, 2026-08-17** —
+   `tasks/japan_fp/seeds/`, four schools plus a test suite proving they are
+   materially distinct doctrines rather than variants. They need no API access
+   and cost nothing to hold. What they are for is in `seeds/README.md`.
 3. **The mutation-ensemble model list** in `configs/*.yaml`. Four models across
    mixed tiers per §3, judge deliberately absent — but your API access to each
-   provider is unverified. Review before the pilot.
+   provider is unverified, and two of the four ids (`gpt-5.4`,
+   `gemini-3-flash-preview`) are placeholders that may not resolve to anything
+   real. Review before the pilot; it does not block M1.
