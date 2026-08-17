@@ -164,6 +164,17 @@ def main(config_path: str, seed: int, dry_run: bool = False) -> None:
         print(f"  results:     {results_dir}")
         return
 
+    from _eval_harness import shinka_is_real
+
+    if not shinka_is_real():
+        raise SystemExit(
+            "ShinkaEvolve is not installed, or the installed 'shinka' is the "
+            "unrelated PyPI image-upscaling package of the same name.\n"
+            "  pip uninstall -y shinka\n"
+            "  pip install git+https://github.com/SakanaAI/ShinkaEvolve.git\n"
+            "Use --dry-run to validate a config without the engine."
+        )
+
     from shinka.core import EvolutionConfig, ShinkaEvolveRunner
     from shinka.database import DatabaseConfig
     from shinka.launch import LocalJobConfig

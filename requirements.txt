@@ -7,4 +7,12 @@ pytest>=8.0
 
 # The evolution engine itself (Apache-2.0). Not required for Stage A: evaluate.py
 # falls back to an equivalent local harness when it is absent.
+#
 #   pip install git+https://github.com/SakanaAI/ShinkaEvolve.git
+#
+# DO NOT `pip install shinka`. That name on PyPI belongs to an unrelated
+# IMAGE-UPSCALING package by a different author. It imports cleanly and even
+# provides a `shinka.core`, so it looks installed and is not — the harness would
+# silently fall back and you would believe the real engine had run. There is a
+# guard for exactly this: `_eval_harness.shinka_is_real()`, which keys on the
+# entry point rather than on the module existing.
