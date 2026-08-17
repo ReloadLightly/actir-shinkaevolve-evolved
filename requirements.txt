@@ -1,0 +1,10 @@
+# Stage A (API-free foundation) needs only these two.
+pyyaml>=6.0
+pytest>=8.0
+
+# Stage B onward: the frozen judge's Anthropic backend.
+# anthropic>=0.116.0
+
+# The evolution engine itself (Apache-2.0). Not required for Stage A: evaluate.py
+# falls back to an equivalent local harness when it is absent.
+#   pip install git+https://github.com/SakanaAI/ShinkaEvolve.git

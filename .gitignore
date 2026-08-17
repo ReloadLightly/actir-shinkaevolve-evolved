@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+
+# Run outputs. The judge cache and the cost ledger are the audit trail and are
+# tracked deliberately (KICKOFF hard rule 5).
+runs/*
+!runs/ledger/
+runs/ledger/*
+!runs/ledger/.gitkeep
+results/
