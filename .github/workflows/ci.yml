@@ -1,0 +1,113 @@
+name: CI
+
+# Everything here is offline and free. No API key is used, no secret is read,
+# and the judge stays locked — so this can run on every push without any risk
+# of spending. The only workflow that can spend is m1-calibration.yml, which is
+# workflow_dispatch-only and requires a typed confirmation.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Assert the judge ships locked
+        run: |
+          python - <<'PY'
+          import sys, yaml
+          cfg = yaml.safe_load(open("configs/judge.yaml"))
+          problems = []
+          if cfg.get("mode") != "mock":
+              problems.append(f"mode is {cfg.get('mode')!r}, must be 'mock'")
+          if cfg.get("stage_b_authorized") is not False:
+              problems.append("stage_b_authorized must be false")
+          if problems:
+              print("The committed judge config is ARMED:")
+              for p in problems:
+                  print(f"  - {p}")
+              sys.exit(1)
+          print("Judge is locked: mode=mock, stage_b_authorized=false")
+          PY
+
+      - name: Assert no API key is needed or present
+        run: |
+          python - <<'PY'
+          import os, sys
+          leaked = [k for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+                    if os.environ.get(k)]
+          if leaked:
+              print(f"CI must not receive credentials, but has: {leaked}")
+              sys.exit(1)
+          print("No API credentials in this job, as intended.")
+          PY
+
+      - name: Test suite
+        run: python -m pytest -q
+
+      - name: Every config dry-runs
+        run: |
+          set -euo pipefail
+          for cfg in configs/pilot.yaml configs/main.yaml configs/ablations/*.yaml; do
+            python tasks/japan_fp/run_evo.py --config_path "$cfg" --dry-run > /dev/null
+            echo "ok  $cfg"
+          done
+
+      - name: Score the seed and all four rival schools under the mock judge
+        run: |
+          set -euo pipefail
+          python scripts/m1_calibration.py | tail -25
+
+      - name: Run the evolution loop end to end
+        run: |
+          set -euo pipefail
+          python scripts/offline_evolution.py --generations 200 --seed 0
+          python analysis/archive_analysis.py --archive runs/offline/archive.jsonl
+
+      - name: Publish the offline report to the run summary
+        if: always()
+        run: |
+          {
+            echo "## Offline pipeline"
+            echo
+            cat runs/offline/report.md 2>/dev/null || echo "(no report produced)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve the offline artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-pipeline-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            runs/offline/report.md
+            runs/offline/analysis.json
+            runs/offline/summary.json
+            runs/offline/*.svg
