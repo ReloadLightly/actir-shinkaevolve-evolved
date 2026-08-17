@@ -463,3 +463,45 @@ def test_the_ensemble_spans_more_than_one_price_tier(configs):
             f"{name} has a single-tier ensemble ({_ensemble(config)}); §3 asks "
             "for mixed tiers and the UCB1 bandit has nothing to trade off"
         )
+
+
+# --------------------------------------------------------------------------
+# Nothing in the repo may ship armed
+# --------------------------------------------------------------------------
+
+
+def test_no_committed_yaml_arms_the_judge():
+    """Every *.yaml under configs/ must be safe to run straight from a clone.
+
+    Stage B authorization lives in configs/judge.local.yaml, which .gitignore
+    excludes and which the user creates deliberately. The template beside it
+    ends in .yaml.example precisely so this glob cannot reach it — if it ever
+    ships as a .yaml, this test fails, which is the point.
+    """
+    armed = []
+    for path in sorted(CONFIG_DIR.rglob("*.yaml")):
+        data = _load(path)
+        if data.get("mode") == "real" or data.get("stage_b_authorized") is True:
+            armed.append(str(path.relative_to(CONFIG_DIR)))
+    assert not armed, (
+        f"these committed configs arm the judge: {armed}. Real calls must "
+        "require a local, gitignored file — never a committed one."
+    )
+
+
+def test_the_local_authorization_template_is_not_loadable_as_a_config():
+    """It must be inert in the repo and require a deliberate copy to take effect."""
+    template = CONFIG_DIR / "judge.local.yaml.example"
+    assert template.is_file(), "the local-authorization template is missing"
+    assert template.suffix == ".example", "the template must not end in .yaml"
+    assert not (CONFIG_DIR / "judge.local.yaml").exists(), (
+        "configs/judge.local.yaml is present in the working tree; it is "
+        "gitignored, but it must never be committed"
+    )
+
+
+def test_the_local_template_is_gitignored_once_copied():
+    gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "configs/judge.local.yaml" in gitignore, (
+        "an armed local config could be committed by accident"
+    )
