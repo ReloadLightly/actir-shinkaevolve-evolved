@@ -7,9 +7,11 @@ projected Lowy Asia Power Index composite in 2030. The third experiment of
 **Authoritative spec: [`RESEARCH_DESIGN.md`](RESEARCH_DESIGN.md). Build stages
 and hard rules: [`KICKOFF.md`](KICKOFF.md).**
 
-Status: **Stage A complete** — API-free foundation, 43 tests green, no network
-call possible. Stage B (the first real judge calls) needs Roland's explicit go
-and an API key.
+Status: **Stage A complete, M0 approved** (2026-08-17) — API-free foundation,
+43 tests green, no network call possible. Scenarios and rubric are approved but
+deliberately still `DRAFT`; they freeze after the M1 smoke test. Stage B (the
+first real judge calls) needs an explicit go and an API key. See
+[`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Quick start
 
@@ -38,13 +40,13 @@ tasks/japan_fp/
   evaluate.py       # Stage 1 validity gate -> Stage 2 frozen judge -> Lowy aggregation
   run_evo.py        # ShinkaEvolve wiring + run provenance manifest
   judge/client.py   # frozen judge: MOCK by default, content-hash cache, cost ledger
-  scenarios/        # S1-S3 vignettes            [DRAFT - not frozen]
-  judge_prompt.md   # anchored delta rubric      [DRAFT - not frozen]
+  scenarios/        # S1-S3 vignettes            [M0-approved, freezes after M1]
+  judge_prompt.md   # anchored delta rubric      [M0-approved, freezes after M1]
   FROZEN.json       # recorded hashes of the four frozen files
 configs/            # judge.yaml, pilot.yaml (30 gens), main.yaml (150), ablations/
 scripts/freeze.py   # re-record frozen hashes under a new version
 tests/              # the four Stage A tests
-docs/               # JUDGE_MODEL_NOTE.md, OPEN_QUESTIONS.md
+docs/               # DECISIONS.md, JUDGE_MODEL_NOTE.md, OPEN_QUESTIONS.md
 ```
 
 ## How fitness works

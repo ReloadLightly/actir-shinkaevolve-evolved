@@ -1,8 +1,8 @@
 # Note for M0: "temperature 0" constrains which judge models are available
 
-**Status: a finding, not a decision. The judge model is yours to choose
-(RESEARCH_DESIGN §8). This note exists so the choice is made with the
-constraint visible.**
+**Status: DECIDED at M0, 2026-08-17 — `claude-haiku-4-5-20251001` at
+temperature 0.0 (docs/DECISIONS.md). This note is retained as the rationale:
+it records the constraint the choice was made under.**
 
 ---
 
@@ -35,7 +35,7 @@ favour of what the design already wanted.
 
 ## What is configured by default
 
-`configs/judge.yaml` proposes:
+`configs/judge.yaml` configures:
 
 ```yaml
 provider: anthropic
@@ -84,16 +84,16 @@ Every real call writes its token counts and its cost — with the price table it
 used — to `runs/ledger/judge_calls.jsonl`, so the ledger stays truthful even if
 list prices change later.
 
-## Decisions this leaves you
+## What this left open (resolved at M0)
 
-1. **Provider.** Only `anthropic` has an implemented backend. If you would
-   rather use the OpenAI tier the paper used, say so and I will add that
-   backend — the client is written against a provider-neutral interface.
-2. **Model.** The default above is a proposal.
-3. **Whether determinism matters enough** to constrain the tier at all. If you
-   would rather have a stronger judge and accept sampling you cannot pin, that
-   is a defensible trade — but it belongs in the limitations section, next to
-   the oracle problem.
+1. **Provider** — resolved: `anthropic`. Only that backend is implemented. If
+   you later want the OpenAI tier the paper used, the client is written against
+   a provider-neutral interface and I can add it.
+2. **Model** — resolved: `claude-haiku-4-5-20251001`.
+3. **Whether determinism matters enough to constrain the tier** — resolved in
+   favour of determinism. The judge is pinned and temperature 0, at the cost of
+   being a cheap-tier model. That trade is the design's own ("cheap, frozen,
+   boring", §2.2) and needs no defence beyond it.
 
 ## The judge-swap check is unaffected
 

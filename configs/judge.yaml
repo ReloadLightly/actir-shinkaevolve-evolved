@@ -4,15 +4,15 @@
 # and makes no network call. Switching to `real` ALSO requires
 # stage_b_authorized: true. Both are needed; neither alone is enough.
 #
-# Choosing the judge model is Roland's M0 decision (RESEARCH_DESIGN section 8).
-# The default below is a proposal, not a decision — see docs/JUDGE_MODEL_NOTE.md
-# for why a temperature-0 judge constrains the choice.
+# Judge model DECIDED at M0 on 2026-08-17 (docs/DECISIONS.md). A dated snapshot,
+# so genuinely pinned; it accepts temperature 0, which the Claude 5 tier does not.
+# Changing it is a new experiment, not an edit. See docs/JUDGE_MODEL_NOTE.md.
 
 mode: mock                              # mock | real
 stage_b_authorized: false               # Roland flips this at the Stage B gate
 
 provider: anthropic
-model: claude-haiku-4-5-20251001        # dated snapshot = genuinely pinned
+model: claude-haiku-4-5-20251001        # M0-decided; dated snapshot = genuinely pinned
 temperature: 0.0
 max_tokens: 2000
 
