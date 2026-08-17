@@ -1,0 +1,22 @@
+# The frozen judge (RESEARCH_DESIGN section 2.2).
+#
+# HARD RULE (KICKOFF 1): mode defaults to `mock`, which returns all-zero deltas
+# and makes no network call. Switching to `real` ALSO requires
+# stage_b_authorized: true. Both are needed; neither alone is enough.
+#
+# Choosing the judge model is Roland's M0 decision (RESEARCH_DESIGN section 8).
+# The default below is a proposal, not a decision — see docs/JUDGE_MODEL_NOTE.md
+# for why a temperature-0 judge constrains the choice.
+
+mode: mock                              # mock | real
+stage_b_authorized: false               # Roland flips this at the Stage B gate
+
+provider: anthropic
+model: claude-haiku-4-5-20251001        # dated snapshot = genuinely pinned
+temperature: 0.0
+max_tokens: 2000
+
+prompt_version: draft-0                 # bump with any judge_prompt.md change
+
+cache_dir: tasks/japan_fp/judge/cache   # the cache is the audit trail
+ledger_path: runs/ledger/judge_calls.jsonl
