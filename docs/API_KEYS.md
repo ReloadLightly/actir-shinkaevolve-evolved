@@ -8,24 +8,37 @@ arrive at a gate and find you cannot pass it.
 
 | Layer | What it is | Provider | Needed at |
 |---|---|---|---|
-| **The judge** | The frozen world model. Scores portfolios, returns 8 deltas. One pinned model, temperature 0, cached. | **Anthropic** — `claude-haiku-4-5-20251001`, decided at M0 | **M1** (next gate) |
+| **The judge** | The frozen world model. Scores portfolios, returns 8 deltas. One pinned model, temperature 0, cached. | Anthropic **or** OpenAI — both backends implemented; which one is an open decision | **M1** (next gate) |
+| **The second judge** | A different model family, for the judge-swap check (RESEARCH_DESIGN §4). | Whichever the judge is not | **M4** |
 | **The mutation ensemble** | The four models that write candidate programs. | Mixed: Anthropic, OpenAI, Google | **Stage C** (the pilot) |
 
 The judge is *never* a member of the mutation ensemble (KICKOFF hard rule 2),
-so the two lists never overlap.
+so those two lists never overlap.
 
 ## What this means in practice
 
-**For M1 — the next thing that happens — you need `ANTHROPIC_API_KEY`.**
-Nothing else. All 15 calls go to `claude-haiku-4-5-20251001`, cost about
-$0.11, and an OpenAI key cannot substitute: the judge model is an M0 decision
-recorded in `DECISIONS.md`, and `JudgeClient._assert_real_calls_authorized`
-refuses any provider other than `anthropic` because no other backend is wired
-up.
+**Both providers now work as the judge.** As of 2026-08-17 the client has an
+OpenAI backend alongside the Anthropic one, because §4's judge-swap check
+needs a second model family regardless of what M1 uses. Both send byte-identical
+prompts, so a swap differs in the model and nothing else.
 
-**An `OPENAI_API_KEY` is for Stage C**, two gates away, and only if the
-mutation ensemble keeps an OpenAI model in it. See "the ensemble list is still
-a placeholder" below.
+**Which judge M1 uses is an open decision**, because it reopens an M0 approval:
+
+- **Anthropic `claude-haiku-4-5-20251001`** — what M0 approved. Dated snapshot,
+  so genuinely pinned. Needs `ANTHROPIC_API_KEY`.
+- **OpenAI `gpt-5-mini` or `gpt-4.1`** — RESEARCH_DESIGN §2.2 names the paper's
+  own judge tier as "gpt-5-nano / gpt-4.1 / gpt-5-mini at temperature 0", so
+  this is *closer to the design's precedent*, not a substitute for it. Needs
+  `OPENAI_API_KEY`. Changing it means amending the M0 record in
+  `DECISIONS.md`.
+
+Either way M1 is ~15 calls and cents. Whichever is not chosen becomes the M4
+swap judge, so both keys are eventually wanted — just not at the same gate.
+
+**Verify the OpenAI prices before spending.** The OpenAI rows in
+`PRICING_USD_PER_MTOK` are from memory and flagged as unverified in the code.
+The Anthropic rows were checked. Run `--estimate` and sanity-check the figure
+against the ceiling before authorizing.
 
 ## Setting them
 
