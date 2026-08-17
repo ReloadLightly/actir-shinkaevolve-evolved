@@ -1,0 +1,208 @@
+name: Pilot — the first real evolutionary run
+
+# The first run where LLMs actually write policy and a real judge scores it.
+# Ceiling $2.00, enforced by ShinkaEvolve's own max_api_costs, and the run stops
+# itself when it hits that regardless of generations remaining.
+#
+# The pilot uses gpt-4.1-nano alone. Exploration is bounded by evaluation COUNT,
+# not by the eloquence of any single proposal, and nano buys 4.5x the coverage
+# per dollar: ~215 evaluations for $2 against ~48 on gpt-4.1. A malformed
+# candidate costs only the mutation call, because the validity gate rejects it
+# before any judge call is spent.
+#
+# What comes back is the point: an archive, a trajectory, a novelty report, and
+# a corpus of the judge's causal mechanism sentences.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_spend:
+        description: "Type exactly RUN_PILOT to permit real calls. Blank = free dry run."
+        required: false
+        default: ""
+        type: string
+      config:
+        description: "Which run"
+        required: true
+        default: configs/pilot.yaml
+        type: choice
+        options:
+          - configs/pilot.yaml
+          - configs/main.yaml
+          - configs/ablations/random_search.yaml
+      seed:
+        description: "RNG seed, recorded in the run manifest"
+        required: true
+        default: "0"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pilot
+  cancel-in-progress: false
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    env:
+      JAPAN_FP_JUDGE_CONFIG: configs/judge.local.yaml
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies and the real ShinkaEvolve
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt openai
+          python -m pip install "git+https://github.com/SakanaAI/ShinkaEvolve.git"
+
+      - name: Offline test suite must pass first
+        run: python -m pytest -q
+
+      - name: Confirm the engine is the real one
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "tasks/japan_fp")
+          from _eval_harness import shinka_is_real
+          if not shinka_is_real():
+              print("The installed 'shinka' is not ShinkaEvolve. Refusing to run.")
+              sys.exit(1)
+          print("Real ShinkaEvolve confirmed.")
+          PY
+
+      - name: Validate the config against the engine
+        run: |
+          python tasks/japan_fp/run_evo.py \
+            --config_path "${{ inputs.config }}" --seed "${{ inputs.seed }}" --dry-run
+
+      - name: Verify the secret is available
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "OPENAI_API_KEY repository secret is missing or empty."; exit 1
+          fi
+          echo "OPENAI_API_KEY is available."
+
+      - name: Gate on typed confirmation
+        id: gate
+        env:
+          CONFIRM: ${{ inputs.confirm_spend }}
+        run: |
+          if [ "$CONFIRM" = "RUN_PILOT" ]; then
+            echo "spend=yes" >> "$GITHUB_OUTPUT"
+            echo "Confirmed. The run will make real calls."
+          else
+            echo "spend=no" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Dry run — nothing was spent"
+              echo "The config validates against the real engine. Re-run with"
+              echo "\`confirm_spend\` = \`RUN_PILOT\` to start the search."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Arm the judge
+        if: steps.gate.outputs.spend == 'yes'
+        run: cp configs/judge.local.yaml.example configs/judge.local.yaml
+
+      - name: Run the search
+        if: steps.gate.outputs.spend == 'yes'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -o pipefail
+          python tasks/japan_fp/run_evo.py \
+            --config_path "${{ inputs.config }}" --seed "${{ inputs.seed }}" \
+            2>&1 | tail -400 | tee run.log
+
+      - name: Export the archive and analyse it
+        if: always() && steps.gate.outputs.spend == 'yes'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          RESULTS=$(python - <<'PY'
+          import sys, yaml
+          cfg = yaml.safe_load(open("${{ inputs.config }}"))
+          print(cfg["evo_config"]["results_dir"])
+          PY
+          )
+          echo "results_dir=$RESULTS"
+          python analysis/shinka_adapter.py --results "$RESULTS" | tee export.log
+          python analysis/archive_analysis.py --archive "$RESULTS/archive.jsonl"
+          python analysis/novelty.py --archive "$RESULTS/archive.jsonl"
+          {
+            echo "## Archive"
+            cat "$RESULTS/report.md"
+            echo
+            echo "## Novelty and diversity"
+            cat "$RESULTS/novelty.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: What the judge actually said
+        if: always() && steps.gate.outputs.spend == 'yes'
+        continue-on-error: true
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, json, pathlib
+          # The mechanism sentences are the qualitative output: a corpus of
+          # "if Japan does X then Y because Z", each tied to one allocation.
+          print("## Judge mechanism sentences — a sample")
+          print()
+          shown = 0
+          for path in sorted(glob.glob("tasks/japan_fp/judge/cache/*.json"))[:6]:
+              payload = json.loads(pathlib.Path(path).read_text())
+              parsed = payload.get("parsed") or {}
+              print(f"**{payload.get('scenario_id','?')}**")
+              print()
+              for measure, entry in list(parsed.items())[:4]:
+                  if isinstance(entry, dict):
+                      print(f"- `{measure}` {entry.get('delta'):+.1f} — {entry.get('mechanism','')}")
+              print()
+              shown += 1
+          if not shown:
+              print("_No cached judge calls found._")
+          PY
+
+      - name: Total spend against the budget
+        if: always() && steps.gate.outputs.spend == 'yes'
+        run: |
+          python - <<'PY' | tee spend.txt
+          import json, pathlib
+          total, calls = 0.0, 0
+          led = pathlib.Path("runs/ledger/judge_calls.jsonl")
+          if led.is_file():
+              for line in led.read_text().splitlines():
+                  if line.strip():
+                      total += float(json.loads(line).get("cost_usd", 0.0)); calls += 1
+          print(f"Judge calls: {calls}   judge spend: ${total:.4f}")
+          print("Mutation spend is metered by ShinkaEvolve against max_api_costs;")
+          print("see run.log for its own accounting.")
+          print("Working budget $20.00; hard ceiling $50.00; $0.1869 spent by M1 run #1.")
+          PY
+          { echo "## Spend"; echo '```'; cat spend.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve everything
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 90
+          path: |
+            runs/
+            tasks/japan_fp/judge/cache/
+            run.log
+            export.log

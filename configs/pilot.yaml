@@ -28,8 +28,8 @@ db_config:
 evo_config:
   patch_types: [diff, full, cross]
   patch_type_probs: [0.6, 0.3, 0.1]
-  num_generations: 40
-  max_api_costs: 2.00                 # USD 50 project ceiling (docs/BUDGET.md)
+  num_generations: 250
+  max_api_costs: 2.00                 # phase 1 of docs/BUDGET.md
   max_patch_resamples: 3
   max_patch_attempts: 1
   max_novelty_attempts: 1
@@ -40,8 +40,11 @@ evo_config:
 
   # Mutation ensemble: 4 models, mixed tiers, temperatures [0.0, 0.5, 1.0].
   # The judge model must NOT appear here (KICKOFF hard rule 2).
+  # Cheap tier only. Exploration is bounded by evaluation COUNT, not by the
+  # eloquence of any single proposal, and nano buys 4.5x the coverage per
+  # dollar. A malformed candidate costs only the mutation call, because the
+  # validity gate rejects it before any judge call is spent.
   llm_models:
-    - "gpt-4.1"
     - "gpt-4.1-nano"
   llm_kwargs:
     temperatures: [0.0, 0.5, 1.0]

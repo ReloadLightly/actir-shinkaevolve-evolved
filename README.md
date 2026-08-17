@@ -16,8 +16,9 @@ judges (0.92). Rubric revision 2 addresses it; scenarios unchanged. See
 [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/BUDGET.md`](docs/BUDGET.md)
 and [`docs/API_KEYS.md`](docs/API_KEYS.md).
 
-**Budget: USD 15 for the whole project**, superseding KICKOFF's per-stage
-figures. Enforced as `PROJECT_CEILING` in `tests/test_configs.py`.
+**Budget: USD 20 working, USD 50 hard ceiling.** Both enforced in
+`tests/test_configs.py` as `WORKING_BUDGET` and `PROJECT_CEILING`. Phase 2
+happens only if phase 1 earns it. See [`docs/BUDGET.md`](docs/BUDGET.md).
 
 The judge is `gpt-4.1-mini-2025-04-14` at temperature 0 — a dated snapshot in
 the GPT-4.1 family, which is the newest OpenAI family that still accepts
@@ -76,6 +77,15 @@ python tasks/japan_fp/run_evo.py --config_path configs/pilot.yaml --dry-run
 ```
 
 **Two pages can spend money, and nothing else can.**
+
+**Pilot** — the first real evolutionary run. LLMs write policy, a real judge
+scores it, ~$2.00:
+
+> **https://github.com/ReloadLightly/actir-shinkaevolve-evolved/actions/workflows/pilot.yml**
+
+Leave `confirm_spend` blank for a free dry run that validates the config against
+the real engine. Type `RUN_PILOT` to start the search. Returns an archive, a
+trajectory, a novelty report and a sample of the judge's causal reasoning.
 
 **Preflight** — everything that must pass before the pilot, ~$0.06 in one click:
 
