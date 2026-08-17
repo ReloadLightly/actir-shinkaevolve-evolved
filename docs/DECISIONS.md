@@ -203,6 +203,48 @@ judge is OpenAI and §4 requires a different model family.
 
 ---
 
+## M1 run #1 — rubric NOT frozen, 2026-08-17
+
+Roland ran M1 in GitHub Actions: 30 real judge calls, **$0.1869**, 2m14s.
+Run 32058962532. Full analysis in `M1_FINDINGS.md`.
+
+**Result: do not freeze, do not search.** M1 did its job at 1.2% of budget.
+
+| Check | Verdict |
+|---|---|
+| Judge agreement (`gpt-4.1-mini` vs `gpt-4.1`) | Spearman **−0.300** — no reliable agreement |
+| Dynamic range | `gpt-4.1` separates five opposite doctrines by **0.696** composite; max inter-judge disagreement is **0.921**. Noise exceeds signal. |
+| Scenario sensitivity (rule 5) | **Fails.** Accommodation has the *smallest* spread (0.19) and scores worse under S3 than S2 — backwards. |
+| Near-twin anchor | Passes. Dec 2022 vs status-quo-plus 0.22 apart. |
+| Score backfire (rule 2) | Passes. |
+| Diminishing returns (rule 3) | Partially — right direction, weak magnitude. |
+
+**Root cause found: rule 5 asked for something the architecture forbids.** Each
+judge call carries the rubric, *one* scenario, and the portfolio. The judge
+never sees the other two scenarios, so "the same portfolio should not score the
+same under S1, S2 and S3" was an instruction it could not act on. We asked for
+a comparison and supplied one side of it.
+
+**Rubric revision 2** (`FROZEN.json` → `0.3.0-m1-corrected`, still DRAFT):
+names all three scenarios so rule 5 becomes actionable; shows the judge what a
+delta is worth in composite points (±3 ≈ ±0.5, which it was never told); adds
+rule 8 — score against December 2022 rather than against zero — and rule 9,
+price what the portfolio gives up. Scenario texts unchanged.
+
+Deliberately **not** done: widening the delta anchors to manufacture range.
+That would fabricate signal and the search would optimise an artefact.
+
+**One disagreement is kept, not tuned away.** `mini` ranks autonomous
+rearmament first and middle-power last; `gpt-4.1` reverses exactly that pair.
+That is two defensible world models disagreeing about whether force or
+rule-making buys more index points — the oracle problem made measurable. If it
+survives the fix, it is a finding for the paper, not a bug.
+
+**NEEDS RE-APPROVAL.** The M0 approval attached to the old `judge_prompt.md`
+bytes and is void for that file. Re-approval required before any scored run.
+
+---
+
 ## Pending
 
 | # | Decision | Needed by |

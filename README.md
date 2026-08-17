@@ -7,12 +7,12 @@ projected Lowy Asia Power Index composite in 2030. The third experiment of
 **Authoritative spec: [`RESEARCH_DESIGN.md`](RESEARCH_DESIGN.md). Build stages
 and hard rules: [`KICKOFF.md`](KICKOFF.md).**
 
-Status: **Stage A complete, M0 approved, M1 inputs ready** (2026-08-17) —
-API-free foundation, 179 tests green, no network call possible. The five M1
-portfolios (December 2022 plus four rival schools) are written and pass the
-gate. Scenarios and rubric are approved but deliberately still `DRAFT`; they
-freeze after the M1 smoke test. Stage B — the first real judge calls, ~$0.04 —
-needs an explicit go and an `OPENAI_API_KEY`. See
+Status: **M1 run #1 complete — rubric corrected, awaiting re-approval** (2026-08-17) —
+API-free foundation, 179 tests green, no network call possible. M1 ran for **$0.1869** and
+found the rubric wanting: judge agreement −0.300, and the composite spread
+across five opposite doctrines (0.70) smaller than the disagreement between two
+judges (0.92). Rubric revision 2 addresses it; scenarios unchanged. See
+[`docs/M1_FINDINGS.md`](docs/M1_FINDINGS.md). The next step is a 3-call re-test (~$0.006), not a search. See
 [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/BUDGET.md`](docs/BUDGET.md)
 and [`docs/API_KEYS.md`](docs/API_KEYS.md).
 
