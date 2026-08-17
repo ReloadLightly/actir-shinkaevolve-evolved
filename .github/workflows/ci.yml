@@ -90,6 +90,8 @@ jobs:
           python scripts/offline_evolution.py --generations 200 --seed 0
           python analysis/archive_analysis.py --archive runs/offline/archive.jsonl
           python analysis/novelty.py --archive runs/offline/archive.jsonl
+          python scripts/mapelites.py --evaluations 400 --seed 0 --compare
+          python analysis/novelty.py --archive runs/mapelites/archive.jsonl --out runs/mapelites
 
       - name: Publish the offline report to the run summary
         if: always()
@@ -100,6 +102,11 @@ jobs:
             cat runs/offline/report.md 2>/dev/null || echo "(no report produced)"
             echo
             cat runs/offline/novelty.md 2>/dev/null || true
+            echo
+            echo "## MAP-Elites — illumination as a selection rule"
+            echo '```'
+            cat runs/mapelites/mapelites.json 2>/dev/null || true
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve the offline artifacts
@@ -116,3 +123,4 @@ jobs:
             runs/offline/*.svg
             runs/offline/novelty.md
             runs/offline/novelty.json
+            runs/mapelites/
