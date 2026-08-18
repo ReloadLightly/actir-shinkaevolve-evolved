@@ -1,4 +1,4 @@
-# actir-shinkaevolve-evolved
+# actir-evolve-pre
 
 **Evolutionary search over Japanese foreign-policy portfolios, with an LLM as
 the world model.** The third experiment of *"After 2022: Japan's Search for a
