@@ -192,7 +192,7 @@ jobs:
               total += float(json.loads(mut.read_text()).get("spent_usd", 0.0))
           print(f"Judge calls this run: {calls}")
           print(f"Total spent this run: ${total:.4f}")
-          print("Project budget: $15.00, of which $0.1869 was spent by M1 run #1.")
+          print("Working budget $20.00; hard ceiling $50.00; $0.1869 spent by M1 run #1.")
           PY
           { echo "## Spend"; echo '```'; cat spend.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 

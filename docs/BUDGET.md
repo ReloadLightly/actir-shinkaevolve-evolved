@@ -78,7 +78,10 @@ each: **900 evaluations**. Against $12 of search budget that was 14× over on
 the original opus-led ensemble. On the re-picked ensemble it is roughly 3×
 over — still a re-cut, but a far smaller one.
 
-So the study had to be re-cut. The current allocation:
+So the study had to be re-cut. The allocation below is the **superseded**
+$15 cut, kept because it is what the six-arm design costs and therefore what
+phase 2 would have to buy. The live plan is the phase-1/phase-2 split at the
+top of this page.
 
 | Line | Ceiling | Note |
 |---|---|---|
@@ -92,7 +95,7 @@ So the study had to be re-cut. The current allocation:
 | Stage D — ablation: novelty | $2.00 | matched |
 | M4 judge-swap re-scoring | $0.50 | top-20 archive, 60 calls; needs an `ANTHROPIC_API_KEY` |
 | Contingency | $1.25 | |
-| **Total** | **$15.00** | |
+| **Total (superseded)** | **$15.00** | replaced by the $20 phase-1 plan above |
 
 Matched budget across the six Stage D arms is preserved, because §4's
 comparisons measure mechanism only if spend is held equal.
