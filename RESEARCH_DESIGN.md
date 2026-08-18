@@ -91,6 +91,17 @@ The space stays "almost infinite": 30 continuous shares under a budget constrain
 
 **Stage 2, frozen judge (the world model).** One LLM, pinned to an exact API version, temperature 0, cached by content hash, and **excluded from the mutation ensemble** — variation proposes, a separate environment disposes. Per scenario, the judge receives: (a) Japan's real 2025 baseline across the 8 measures, (b) the scenario vignette, (c) the portfolio as JSON (never the code), (d) an anchored rubric. It outputs, per measure, a delta Δ ∈ [−15, +15] on the Lowy 0–100 scale plus a one-sentence causal mechanism. Anchor example in the rubric: "+3 on military capability ≈ the scale of the December 2022 counterstrike + 2%-GDP decision." The judge tier is the paper's meta/novelty tier (they used gpt-5-nano / gpt-4.1 / gpt-5-mini at temperature 0) — cheap, frozen, boring.
 
+> **Correction, 2026-08-18 (preflight run 32084865677).** "Frozen" here means
+> *pinned configuration* — one model, one API version, one rubric, excluded
+> from the mutation ensemble. It does **not** mean deterministic output, and
+> this section previously implied that it did. Three identical requests at
+> temperature 0 returned per-measure deltas differing by up to 1.000, with one
+> measure changing sign; at the composite level the self-noise is 0.17. The
+> content-hash cache therefore freezes whichever *draw* arrived first rather
+> than reproducing a judgement. See `docs/PREFLIGHT_FINDINGS.md` §1 for what
+> this does and does not invalidate — briefly: doctrine-scale ranking survives
+> at 4.2× signal-to-noise, increment-scale ranking does not.
+
 **Aggregation is Lowy's own formula, not ours.** With baseline scores b_m and published weights w_m (economic capability 17.5%, military capability 17.5%, economic relationships 15%, resilience 10%, future resources 10%, defence networks 10%, diplomatic influence 10%, cultural influence 10%):
 
 ```

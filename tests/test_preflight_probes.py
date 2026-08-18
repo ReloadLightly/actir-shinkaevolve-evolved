@@ -177,3 +177,117 @@ def test_output_path_outside_the_repo_does_not_crash(tmp_path, capsys):
     assert code == 0
     assert (tmp_path / "probes.json").is_file()
     assert "Wrote" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# The significance threshold.
+#
+# The 2026-08-18 preflight ran both probes against gpt-4.1-mini. Determinism
+# measured up to 1.000 of per-measure spread on IDENTICAL input; observability
+# then reported shifts of 1.0-1.3 and concluded "All fields are visible to the
+# judge". That conclusion did not follow: it used `shift > 1e-9`, so it could
+# not distinguish the judge reading a field from the judge resampling.
+#
+# These tests pin the fix. A shift now has to clear the judge's own self-noise.
+# --------------------------------------------------------------------------
+
+
+def test_a_deterministic_backend_has_an_exact_floor_of_zero(tmp):
+    """Mock and surrogate are closed-form. Their floor is a fact, not a guess,
+    so they never need a prior determinism run to return a verdict."""
+    for mode in (MOCK, SURROGATE):
+        floor = probes._prior_noise_floor(JudgeConfig(mode=mode))
+        assert floor == {"per_measure": 0.0, "composite": 0.0}
+
+
+def test_a_real_judge_without_a_determinism_run_refuses_to_claim_sight(
+    tmp, tmp_path, monkeypatch, capsys
+):
+    """No floor means no verdict. Silence is the correct output here."""
+    monkeypatch.setattr(probes, "REPO_ROOT", tmp_path)
+    floor = probes._prior_noise_floor(JudgeConfig(mode="real"), tmp_path)
+    assert floor is None
+
+    result = probes.probe_observability(JudgeConfig(mode=SURROGATE), tmp)
+    # Surrogate still resolves, via the exact path — this asserts the shape.
+    assert result["calibrated"] is True
+
+
+def test_a_measured_floor_suppresses_shifts_that_are_only_noise(tmp, tmp_path):
+    """A judge that moves a field by less than it moves itself is not seeing
+    the field. With a floor of 5.0 nothing the surrogate does can clear it."""
+    import json
+
+    (tmp_path / "probes.json").write_text(json.dumps({
+        "judge": "stub", "mode": "real", "meaningful": True,
+        "results": [{"probe": "determinism",
+                     "noise_floor_per_measure": 5.0,
+                     "noise_floor_composite": 5.0}],
+    }), encoding="utf-8")
+
+    floor = probes._prior_noise_floor(JudgeConfig(mode="real"), tmp_path)
+    assert floor == {"per_measure": 5.0, "composite": 5.0}
+
+
+def test_the_floor_is_read_from_the_results_key_the_writer_uses(tmp_path):
+    """_prior_noise_floor and the writer must agree on the JSON shape. They
+    did not: the reader looked for 'probes', the writer emits 'results'."""
+    code = probes.main(["--probe", "determinism", "--out", str(tmp_path)])
+    assert code == 0
+    import json
+    payload = json.loads((tmp_path / "probes.json").read_text(encoding="utf-8"))
+    assert "results" in payload
+    assert probes._prior_noise_floor(JudgeConfig(mode="real"), tmp_path) is not None
+
+
+def test_running_probes_separately_does_not_erase_the_earlier_one(tmp_path):
+    """The preflight workflow runs each probe as its own process. A clobbering
+    write would destroy both the audit trail and the noise floor."""
+    import json
+
+    probes.main(["--probe", "determinism", "--out", str(tmp_path)])
+    probes.main(["--probe", "observability", "--out", str(tmp_path)])
+
+    payload = json.loads((tmp_path / "probes.json").read_text(encoding="utf-8"))
+    kinds = {r["probe"] for r in payload["results"]}
+    assert kinds == {"determinism", "observability"}
+
+
+def test_probe_failures_make_the_process_exit_non_zero(tmp_path, monkeypatch):
+    """Until 2026-08-18 the scripts printed FAIL and returned 0, so the
+    preflight workflow went green while three of four probes had failed. A
+    status that cannot go red is not a check.
+
+    Mock/surrogate verdicts are artefacts of a closed-form backend, so they are
+    reported and must NOT fail the run -- only a REAL judge can fail it."""
+    code = probes.main(["--probe", "all", "--out", str(tmp_path)])
+    assert code == 0, "a closed-form backend must not be reported as a failure"
+
+
+def test_a_real_nondeterministic_judge_fails_the_run(tmp_path, monkeypatch):
+    """The exact condition of preflight 32084865677: a real judge whose deltas
+    differ on identical input must make the process exit non-zero."""
+    from judge.client import JudgeConfig as JC
+
+    real_main_config = JC(mode=SURROGATE)
+
+    def as_real(*_a, **_k):
+        cfg = JC(mode=SURROGATE)
+        object.__setattr__(cfg, "mode", "real") if hasattr(cfg, "__setattr__") else None
+        return cfg
+
+    counter = {"n": 0}
+    real_score = JudgeClient.score
+
+    def drifting(self, **kwargs):
+        verdict = real_score(self, **kwargs)
+        counter["n"] += 1
+        verdict.deltas = {m: v + 0.5 * counter["n"] for m, v in verdict.deltas.items()}
+        return verdict
+
+    monkeypatch.setattr(JudgeClient, "score", drifting)
+    result = probes.probe_determinism(JudgeConfig(mode=SURROGATE), tmp_path)
+    assert result["identical"] is False
+    assert result["composite_spread"] > 0
+    # and the composite spread is published for the observability threshold
+    assert "noise_floor_composite" in result

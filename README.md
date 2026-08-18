@@ -5,9 +5,17 @@ the world model.** The third experiment of *"After 2022: Japan's Search for a
 Novel Foreign Policy"*.
 
 The purpose is not to find Japan's optimal foreign policy. It is to **illuminate
-a near-infinite space of coherent alternatives** and surface robust or novel
+a near-infinite space of well-formed alternatives** and surface robust or novel
 options a human author would not have written down — and to measure honestly how
 far an LLM judge can be trusted to guide that search.
+
+> **Read [`docs/REVIEW_RESPONSE.md`](docs/REVIEW_RESPONSE.md) before any claim
+> in this README.** A review on 2026-08-18 found eight defects, all fair, and
+> acting on one of them **retracted this project's headline coverage result**:
+> against a real random baseline, which had never run, MAP-Elites loses. The
+> word *coherent* is deliberately not used above: the validity gate proves a
+> portfolio is **well-formed**, never that it is fiscally, legally or
+> politically coherent.
 
 **Authoritative spec: [`RESEARCH_DESIGN.md`](RESEARCH_DESIGN.md). Build stages
 and hard rules: [`KICKOFF.md`](KICKOFF.md). What the evidence supports:
@@ -84,8 +92,15 @@ supplied one side of it. Rubric revision 2 fixes that and awaits re-approval.
 Full analysis: [`docs/M1_FINDINGS.md`](docs/M1_FINDINGS.md).
 
 This is why the claim is about *diversity*, not ranking. A resolution floor that
-would sink "the champion is best" barely touches "the archive is diverse and
-coherent".
+would sink "the champion is best" barely touches "the archive is diverse".
+
+**But diversity alone does not survive either.** Against a genuine null model —
+independent random draws, no parents, no feedback — MAP-Elites loses on coverage
+at every budget tested (29.7% vs 52.1% at 150 valid evaluations; 68.8% vs 72.4%
+at 900). Coverage of a low-dimensional behaviour grid cannot be a headline
+result when a trivial null beats the algorithm on it. What the null *cannot* do
+is produce portfolios anyone would read as a strategy, so the surviving claim is
+about **coherent** diversity — and that is not yet measured.
 
 ---
 

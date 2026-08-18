@@ -39,6 +39,20 @@ class GateLimits:
     horizon: Tuple[int, int] = (2026, 2030)
     share_sum: float = 1.0
     share_sum_tolerance: float = 1e-6
+    # Shares are a NORMALISATION CONVENTION, not a substantive claim: only the
+    # proportions carry policy meaning, because "marginal strategic effort" has
+    # no natural unit. So a proposal whose shares sum to 0.67 is not proposing
+    # less effort, it is proposing the same trade-offs with the arithmetic
+    # botched. The preflight measured gpt-4.1-nano summing 30 terms to 0.67 and
+    # being rejected for it -- a 100% rejection rate that would have burned the
+    # pilot's whole ceiling on gate failures.
+    #
+    # So the gate REPAIRS rather than rejects, rescaling to sum to share_sum,
+    # provided the raw sum is inside this band. Outside it the proposal is not
+    # a botched allocation but an incoherent one, and is still rejected. The
+    # repair rate is published as a metric, never hidden.
+    share_sum_repair_min: float = 0.5
+    share_sum_repair_max: float = 2.0
     how_char_cap: int = 240
     initiative_name_char_cap: int = 120
     initiative_rationale_char_cap: int = 400
@@ -181,6 +195,15 @@ class PolicyPortfolio:
         self._initiatives: List[Initiative] = []
         self._defence_path: Dict[int, float] = dict(SEED_DEFENCE_PATH)
         self._defence_path_explicit: bool = False
+        #: Raw sum before any repair, and whether repair actually fired.
+        self.raw_share_sum: Optional[float] = None
+        self.shares_repaired: bool = False
+        #: The instrument decisions this allocation was DERIVED from, when it
+        #: was. Empty for a portfolio whose dials were chosen directly, which
+        #: is the older representation. Carried into to_dict() so the validity
+        #: gate can test fiscal and political feasibility -- impossible for an
+        #: allocation over outcomes, because outcomes have no price.
+        self.instruments: Dict[str, float] = {}
 
     # -- construction API used inside the EVOLVE-BLOCK ---------------------
 
@@ -336,6 +359,35 @@ class PolicyPortfolio:
     def total_share(self) -> float:
         return sum(d.share for d in self._dials.values())
 
+    def normalise_shares(self, limits: "GateLimits") -> bool:
+        """Rescale shares to sum to ``limits.share_sum``. Returns True if repaired.
+
+        Called by the Stage 1 gate before the sum is checked. A no-op when the
+        shares already sum correctly, when any share is negative (that is a real
+        error, not an arithmetic slip), or when the raw sum falls outside the
+        repair band -- in all of those cases the gate's own checks still fire.
+
+        Records ``raw_share_sum`` either way, so the repair rate is measurable
+        across a whole run rather than inferred.
+        """
+        total = self.total_share()
+        self.raw_share_sum = total
+        if not math.isfinite(total) or total <= 0.0:
+            return False
+        if any(d.share < 0.0 for d in self._dials.values()):
+            return False
+        if abs(total - limits.share_sum) <= limits.share_sum_tolerance:
+            return False
+        if not (limits.share_sum_repair_min <= total <= limits.share_sum_repair_max):
+            return False
+        factor = limits.share_sum / total
+        for dial_id, dial in self._dials.items():
+            self._dials[dial_id] = Dial(
+                dial_id=dial.dial_id, share=dial.share * factor, how=dial.how
+            )
+        self.shares_repaired = True
+        return True
+
     def unknown_dials(self) -> List[str]:
         return sorted(d for d in self._dials if d not in DIALS)
 
@@ -363,7 +415,7 @@ class PolicyPortfolio:
         """
         ordered_ids = [d for d in DIALS if d in self._dials]
         ordered_ids += sorted(d for d in self._dials if d not in DIALS)
-        return {
+        payload: Dict[str, Any] = {
             "horizon": list(self.horizon),
             "dials": [
                 {
@@ -394,6 +446,16 @@ class PolicyPortfolio:
                 for year, value in sorted(self._defence_path.items())
             },
         }
+        # Only present when the allocation was DERIVED from instrument
+        # decisions. Omitted otherwise so the cache key of an older-style
+        # portfolio is byte-identical to what it was before this field existed
+        # -- adding a key unconditionally would invalidate every cached judge
+        # call in the repository and silently re-spend the ledger.
+        if self.instruments:
+            payload["instruments"] = {
+                k: round(float(v), 6) for k, v in sorted(self.instruments.items())
+            }
+        return payload
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return (

@@ -118,6 +118,13 @@ def validity_gate(
     if not dials:
         reasons.append("no dials were invested in; the portfolio is empty")
 
+    # Repair before checking. Shares are a normalisation convention, so a
+    # proposal summing to 0.67 has botched arithmetic, not botched policy --
+    # see GateLimits.share_sum_repair_min. Out-of-band sums are NOT repaired
+    # and still fail the check below.
+    portfolio.normalise_shares(limits)
+    dials = portfolio.dials
+
     for dial_id, dial in sorted(dials.items()):
         if dial_id in unknown:
             continue
@@ -139,8 +146,33 @@ def validity_gate(
     elif abs(total - limits.share_sum) > limits.share_sum_tolerance:
         reasons.append(
             f"shares must sum to {limits.share_sum} "
-            f"(+/- {limits.share_sum_tolerance}), they sum to {total:.6f}"
+            f"(+/- {limits.share_sum_tolerance}), they sum to {total:.6f}; "
+            f"auto-repair applies only to sums within "
+            f"[{limits.share_sum_repair_min}, {limits.share_sum_repair_max}] "
+            f"and to non-negative shares"
         )
+
+    # -- policy coherence -------------------------------------------------
+    # Only for portfolios DERIVED from instrument decisions. A review of
+    # 2026-08-18 was right that the gate proved formatting and not coherence,
+    # and right that this was foundational: an allocation over Lowy OUTCOMES
+    # cannot be fiscally infeasible, because outcomes have no price. Once the
+    # searched layer is the instruments, it can be, and here it is.
+    #
+    # Envelopes are calibrated so Japan's actual December 2022 decision comes
+    # out feasible (it happened) and stretched (it nearly broke the government
+    # that did it). Contradictory pairs and constitutional prerequisites are
+    # WARNINGS, not violations: pulling in two directions is a real strategic
+    # posture and the archive should be able to hold it. Pricing it is the
+    # judge's job, not the gate's.
+    if getattr(portfolio, "instruments", None):
+        try:
+            from instruments import coherence_report
+        except ImportError:          # instruments module absent: skip, do not crash
+            coherence_report = None
+        if coherence_report is not None:
+            report = coherence_report({"instruments": portfolio.instruments})
+            reasons.extend(report.violations)
 
     # -- sequence ---------------------------------------------------------
     phases = portfolio.phases
@@ -318,6 +350,13 @@ def score_portfolio(
         ),  # Herfindahl over the 30 dials: 1/30 = perfectly even, 1.0 = all-in
         "custom_initiatives": len(portfolio.initiatives),
         "defence_gdp_2030": portfolio.defence_path.get(2030),
+        # Repair telemetry. The preflight found gpt-4.1-nano summing 30 shares
+        # to 0.67 -- a 100% gate-rejection rate. The gate now rescales instead,
+        # and publishes what it had to do, so the repair rate is a reported
+        # statistic about the mutation models rather than a hidden convenience.
+        "shares_repaired": 1 if portfolio.shares_repaired else 0,
+        "share_sum_raw": round(portfolio.raw_share_sum, 6)
+        if portfolio.raw_share_sum is not None else None,
     }
     for scenario_id, value in composites.items():
         public[f"composite_{scenario_id}"] = round(value, 4)

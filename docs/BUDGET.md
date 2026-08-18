@@ -78,7 +78,10 @@ each: **900 evaluations**. Against $12 of search budget that was 14× over on
 the original opus-led ensemble. On the re-picked ensemble it is roughly 3×
 over — still a re-cut, but a far smaller one.
 
-So the study had to be re-cut. The current allocation:
+So the study had to be re-cut. The allocation below is the **superseded**
+$15 cut, kept because it is what the six-arm design costs and therefore what
+phase 2 would have to buy. The live plan is the phase-1/phase-2 split at the
+top of this page.
 
 | Line | Ceiling | Note |
 |---|---|---|
@@ -92,7 +95,7 @@ So the study had to be re-cut. The current allocation:
 | Stage D — ablation: novelty | $2.00 | matched |
 | M4 judge-swap re-scoring | $0.50 | top-20 archive, 60 calls; needs an `ANTHROPIC_API_KEY` |
 | Contingency | $1.25 | |
-| **Total** | **$15.00** | |
+| **Total (superseded)** | **$15.00** | replaced by the $20 phase-1 plan above |
 
 Matched budget across the six Stage D arms is preserved, because §4's
 comparisons measure mechanism only if spend is held equal.
@@ -105,6 +108,21 @@ comparisons measure mechanism only if spend is held equal.
 | `gpt-4.1` only | 29 |
 | `gpt-4.1` + `gpt-4.1-nano`, 50/50 *(now configured)* | **51** |
 | `gpt-4.1-nano` only | 189 |
+
+> **Measured 2026-08-18** (preflight 32086108143, 3 attempts per model against
+> the real validity gate). The table above assumed every mutation call yields a
+> scoreable individual. It does not:
+>
+> | | mutation/call | gate pass | mutation/valid | + judge | evals per $2 |
+> |---|---|---|---|---|---|
+> | `gpt-4.1-nano` | $0.0017 | **33%** | $0.0051 | $0.0120 | **167** |
+> | `gpt-4.1` | $0.0340 | **100%** | $0.0340 | $0.0409 | **49** |
+>
+> Nano keeps a **3.4×** advantage per valid individual despite failing two
+> attempts in three, because a rejected candidate costs only the mutation call —
+> the validity gate refuses it before any judge call is spent. The free exact
+> check is what makes the cheap model affordable, which is the
+> `ALPHAEVOLVE_COMPARISON.md` principle paying for itself in cash.
 
 Nine evaluations per arm is not a search; it is nine samples. The re-picked
 ensemble gives roughly 51, and more if the UCB1 bandit finds the nano tier
