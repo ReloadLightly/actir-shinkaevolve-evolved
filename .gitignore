@@ -17,3 +17,12 @@ results/
 # Local Stage B authorization. Carries mode: real + stage_b_authorized: true so
 # that the SHIPPED configs/judge.yaml can stay locked forever. Never commit it.
 configs/judge.local.yaml
+
+# Python distribution artifacts. `pip download` drops wheels into the CWD, and
+# a careless `git add -A` then commits them — which is exactly how 164 MB of
+# transitive dependencies ended up in this repository's root.
+*.whl
+*.tar.gz
+*.egg-info/
+dist/
+build/
