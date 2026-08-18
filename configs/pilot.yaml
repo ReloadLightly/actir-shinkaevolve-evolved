@@ -51,8 +51,25 @@ evo_config:
   # eloquence of any single proposal, and nano buys 4.5x the coverage per
   # dollar. A malformed candidate costs only the mutation call, because the
   # validity gate rejects it before any judge call is spent.
+  # Mixed tier, decided on measurement rather than on price alone.
+  # Preflight 32086108143 put 3 attempts through each model against the real
+  # gate: nano 1/3 (33%), gpt-4.1 3/3 (100%). Nano's failures were inventing
+  # dial names that are not Lowy submeasures.
+  #
+  # Nano still wins on the number that matters. Per VALID individual, paying
+  # the rejection tax and the judge:
+  #     nano     $0.0017/0.33 + $0.0069 = $0.0120  ->  167 evaluations per $2
+  #     gpt-4.1  $0.0340/1.00 + $0.0069 = $0.0409  ->   49 evaluations per $2
+  # a 3.4x advantage, because a rejected candidate costs only the mutation
+  # call -- the validity gate refuses it before any judge call is spent.
+  #
+  # Both are here anyway. Nano alone would leave the run's throughput hostage
+  # to a 33% first-shot rate, and carrying gpt-4.1 lets UCB1 arbitrate on
+  # measured reward instead of on our guess. It also makes per-model yield a
+  # reportable result rather than an assumption.
   llm_models:
     - "gpt-4.1-nano"
+    - "gpt-4.1"
   llm_kwargs:
     temperatures: [0.0, 0.5, 1.0]
     max_tokens: 32768

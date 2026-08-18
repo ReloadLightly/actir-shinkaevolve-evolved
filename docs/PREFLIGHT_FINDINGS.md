@@ -183,6 +183,72 @@ statistic about model capability**, never a hidden convenience.
 
 ---
 
+## 5. Re-flight, and the answer the first run could not give
+
+Two further dispatches, $0.0165 and $0.0522.
+
+**Run [32085837019](https://github.com/ReloadLightly/actir-shinkaevolve-evolved/actions/runs/32085837019).**
+Repair worked — nano's shares came back at `1.0` and the portfolio reached the
+rest of the gate. It failed there, on two constraints the arithmetic error had
+been masking:
+
+```
+- phase 2 focuses on unknown dial 'military_capability.nuclear_deterrence'
+- defence spending 6.0-7.0% of GDP, outside the bound [0.5, 3.5], all five years
+```
+
+Neither is repairable, and neither should be. The invented dial is a
+cross-reference error in a phase's focus list rather than in the allocation —
+but it is also substantively interesting: **the model wanted to express nuclear
+deterrence, and Lowy's ontology has no dial for it.** That is exactly what
+`custom_initiatives` exists for, and the prompt now says so. The defence path is
+a feasibility bound, not a convention: 7% of GDP is not a Japanese defence
+budget under any government, and clamping it would silently rewrite the policy.
+
+The fix was prompt-side. `TASK_SYS_MSG` — what the real run uses, and which
+stated **none** of the gate's hard bounds — now leads with them.
+
+**Run [32086108143](https://github.com/ReloadLightly/actir-shinkaevolve-evolved/actions/runs/32086108143),
+3 attempts per model, both tiers.** The first probe tested one model once, so it
+could not tell a prompt problem from a model-tier problem, nor a 0% pass rate
+from a 30% one. With a rate:
+
+```
+gpt-4.1-nano   1/3  (33%)
+gpt-4.1        3/3  (100%)
+```
+
+It is a tier problem. Nano's remaining failures are all the same kind —
+inventing plausible submeasures (`diplomatic_influence.cultural_export`,
+`diplomatic_influence.innovation_diplomacy`) that Lowy does not have.
+
+### Nano still wins, and this is why the gate ordering matters
+
+Per **valid** individual, paying the rejection tax and the judge:
+
+| | mutation/call | pass rate | mutation/valid | + judge | evaluations per $2 |
+|---|---|---|---|---|---|
+| `gpt-4.1-nano` | $0.0017 | 33% | $0.0051 | **$0.0120** | **167** |
+| `gpt-4.1` | $0.0340 | 100% | $0.0340 | **$0.0409** | **49** |
+
+**A 3.4× advantage to nano even at a third the pass rate.** The reason is
+structural: a rejected candidate costs only the mutation call, because the
+validity gate refuses it *before* any judge call is spent. This is the clearest
+vindication so far of the exact-verifier-first principle from
+`docs/ALPHAEVOLVE_COMPARISON.md` — the free exact check is what makes the cheap
+model affordable.
+
+`configs/pilot.yaml` now carries **both** models. Nano alone would leave
+throughput hostage to a 33% first-shot rate; carrying gpt-4.1 lets UCB1
+arbitrate on measured reward rather than on our guess, and makes per-model yield
+a reported result instead of an assumption. In the loop proper the rate is
+also less punishing than it looks: ShinkaEvolve feeds the gate's reason string
+back, so nano clears the gate within three resamples about **70%** of the time.
+
+**The blocking failure is cleared. The pilot can run.**
+
+---
+
 ## What this does to the plan
 
 **The pilot does not run until a re-flighted mutation probe passes.** That is
@@ -193,8 +259,8 @@ Ordered:
 
 1. ~~Repair-not-reject in the gate; retarget the prompt at trade-offs.~~ Done.
 2. ~~Calibrate the observability verdict against measured self-noise.~~ Done.
-3. Re-run preflight (~$0.03). Gate: **mutation must pass**.
-4. Then, and only then, the pilot.
+3. ~~Re-run preflight. Gate: mutation must pass.~~ Done — 33% / 100%, cleared.
+4. The pilot, on the mixed-tier ensemble.
 5. Report coverage as the primary result. Per-cell elites carry a noise caveat.
 6. Re-score the final archive at n=3 and report the standard error.
 

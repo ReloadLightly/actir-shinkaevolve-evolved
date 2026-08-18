@@ -109,6 +109,21 @@ comparisons measure mechanism only if spend is held equal.
 | `gpt-4.1` + `gpt-4.1-nano`, 50/50 *(now configured)* | **51** |
 | `gpt-4.1-nano` only | 189 |
 
+> **Measured 2026-08-18** (preflight 32086108143, 3 attempts per model against
+> the real validity gate). The table above assumed every mutation call yields a
+> scoreable individual. It does not:
+>
+> | | mutation/call | gate pass | mutation/valid | + judge | evals per $2 |
+> |---|---|---|---|---|---|
+> | `gpt-4.1-nano` | $0.0017 | **33%** | $0.0051 | $0.0120 | **167** |
+> | `gpt-4.1` | $0.0340 | **100%** | $0.0340 | $0.0409 | **49** |
+>
+> Nano keeps a **3.4×** advantage per valid individual despite failing two
+> attempts in three, because a rejected candidate costs only the mutation call —
+> the validity gate refuses it before any judge call is spent. The free exact
+> check is what makes the cheap model affordable, which is the
+> `ALPHAEVOLVE_COMPARISON.md` principle paying for itself in cash.
+
 Nine evaluations per arm is not a search; it is nine samples. The re-picked
 ensemble gives roughly 51, and more if the UCB1 bandit finds the nano tier
 competitive — which is exactly the trade-off the bandit exists to discover.
