@@ -57,6 +57,11 @@ a reader can attack them individually instead of attacking a black box.
 The judge still estimates the world's response; the exposure map only says which
 outcomes an instrument is *pointed at*. See `lowy.py` on why our projection is
 not Lowy's published procedure.
+
+**STATUS: DRAFT.** Preregistered and hashed into FROZEN.json. The exposure
+vectors are declared coefficients of a stated model, not measurements, and are
+open to revision under the same rule as world.py: a defect statable without
+reference to which arm it favours, a version bump, and a full rerun.
 """
 
 from __future__ import annotations

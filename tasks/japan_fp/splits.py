@@ -17,6 +17,10 @@ Three disjoint banks, and the discipline that goes with them:
 
 The banks also mix structural forms, not only parameter draws, so a result that
 depends on one functional form for the counterpart response shows up as such.
+
+**STATUS: DRAFT.** Preregistered and hashed into FROZEN.json. Once the
+qualification is reported these seeds stop changing; the test bank is touched
+once.
 """
 
 from __future__ import annotations

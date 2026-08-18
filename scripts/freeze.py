@@ -24,10 +24,19 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = REPO_ROOT / "tasks" / "japan_fp" / "FROZEN.json"
 
 FROZEN_FILES: List[str] = [
+    # Stage A: the judge's inputs.
     "tasks/japan_fp/scenarios/S1_grinding_status_quo.md",
     "tasks/japan_fp/scenarios/S2_taiwan_contingency.md",
     "tasks/japan_fp/scenarios/S3_us_retrenchment.md",
     "tasks/japan_fp/judge_prompt.md",
+    # Project B: the preregistration. These three ARE the experiment's
+    # hypothesis -- the dynamics, the action space and the held-out split. They
+    # are hashed before scripts/qualify_world.py runs, which is the mechanical
+    # defence against tuning the model until it returns the desired answer.
+    # A change without a version bump fails tests/test_frozen_files.py.
+    "tasks/japan_fp/world.py",
+    "tasks/japan_fp/instruments.py",
+    "tasks/japan_fp/splits.py",
 ]
 
 

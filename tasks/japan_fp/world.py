@@ -41,6 +41,13 @@ enough to matter:
 3. **Counterpart response.** China's coercion responds to Japan's buildup, the
    US commitment to Japan's burden-sharing. That makes this a strategic
    interaction rather than open-loop control.
+
+**STATUS: DRAFT.** This file is preregistered -- it is hashed into
+FROZEN.json before `scripts/qualify_world.py` runs. While the manifest says
+DRAFT the coefficients may still be revised, but only for a defect statable
+without reference to which arm it favours, and only with a version bump and a
+full rerun. Once the qualification is reported, status becomes FROZEN and this
+file stops changing.
 """
 
 from __future__ import annotations
@@ -63,7 +70,7 @@ from lowy import BASELINE_2025, MEASURES, WEIGHTS, composite
 # exists the entry says "expert assumption" rather than implying one.
 # --------------------------------------------------------------------------
 
-MODEL_VERSION = "1.1.0-preregistered"
+MODEL_VERSION = "1.2.0-preregistered"
 
 #: Years simulated. 2026-2030 inclusive: five decisions, matching the horizon
 #: the whole project has used and the window the December 2022 documents set
@@ -334,20 +341,41 @@ def apply_decision(state: WorldState, deltas: Mapping[str, float]
         target = _clip(state.instrument_level[ident] + clipped)
         wanted[ident] = target - state.instrument_level[ident]
 
-    # Only INCREASES cost money; standing down is free but slow (inertia still
-    # applies), which is why a committed posture is expensive to unwind.
-    fiscal = sum(BY_ID[i].fiscal_gdp_pct * max(0.0, d) for i, d in wanted.items())
+    # FISCAL cost is a LEVEL cost, charged every year on the whole standing
+    # commitment. POLITICAL cost is a CHANGE cost, charged when the fight is
+    # fought and not thereafter.
+    #
+    # v1.2.0 fixed a bug here, and it was a bug rather than a modelling
+    # judgement: `Instrument.fiscal_gdp_pct` is documented as "cost at full
+    # intensity, as share of GDP PER YEAR", but this function charged it only
+    # when an instrument INCREASED. Once at maximum, a commitment was held for
+    # free. The consequence was a degenerate model with no trade-off at all --
+    # the optimal policy was every one of the 21 instruments at maximum, budgets
+    # went slack after year two, and constant, open-loop and feedback policies
+    # all converged to an identical score because there was nothing to choose.
+    # Maintaining 2% of GDP on defence costs 2% of GDP every year, and a model
+    # in which it does not is not modelling budgets.
+    fiscal = sum(BY_ID[i].fiscal_gdp_pct * max(0.0, state.instrument_level[i] + d)
+                 for i, d in wanted.items())
+    fiscal += sum(BY_ID[i].fiscal_gdp_pct * level
+                  for i, level in state.instrument_level.items()
+                  if i not in wanted)
     political = sum(BY_ID[i].total_political_cost * max(0.0, d)
                     for i, d in wanted.items())
 
-    scale = 1.0
+    # An unaffordable STANDING commitment cannot be fixed by trimming this
+    # year's increases alone, so the whole posture is scaled back toward what
+    # can be paid for. That is what a fiscal crisis does to a defence plan.
     if fiscal > state.fiscal_available and fiscal > 0:
-        scale = min(scale, state.fiscal_available / fiscal)
+        keep = state.fiscal_available / fiscal
+        notes.append(f"standing commitments scaled to {keep:.2f} by fiscal room")
+        for ident in state.instrument_level:
+            target = (state.instrument_level[ident] + wanted.get(ident, 0.0)) * keep
+            wanted[ident] = target - state.instrument_level[ident]
     if political > state.political_available and political > 0:
-        scale = min(scale, state.political_available / political)
-    if scale < 1.0:
-        notes.append(f"decision scaled to {scale:.2f} of requested by budget")
-        wanted = {i: (d * scale if d > 0 else d) for i, d in wanted.items()}
+        keep = state.political_available / political
+        notes.append(f"new decisions scaled to {keep:.2f} by political capital")
+        wanted = {i: (d * keep if d > 0 else d) for i, d in wanted.items()}
 
     return wanted, notes
 
@@ -362,8 +390,8 @@ def step(state: WorldState, params: WorldParams, deltas: Mapping[str, float],
     for ident, delta in applied.items():
         new.instrument_level[ident] = _clip(state.instrument_level[ident] + delta)
 
-    spent_fiscal = sum(BY_ID[i].fiscal_gdp_pct * max(0.0, d)
-                       for i, d in applied.items())
+    spent_fiscal = sum(BY_ID[i].fiscal_gdp_pct * level
+                       for i, level in new.instrument_level.items())
     spent_political = sum(BY_ID[i].total_political_cost * max(0.0, d)
                           for i, d in applied.items())
 
