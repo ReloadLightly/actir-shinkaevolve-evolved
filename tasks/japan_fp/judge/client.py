@@ -23,7 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Tuple
@@ -33,6 +33,14 @@ from lowy import DELTA_MAX, DELTA_MIN, MEASURES
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
+
+class JudgeBudgetExceeded(RuntimeError):
+    """Raised when a judge call would breach the configured spend ceiling.
+
+    Its own type so a runner can distinguish "we ran out of authorised budget"
+    -- an orderly stop -- from a transport error worth retrying.
+    """
+
 
 MOCK = "mock"
 REAL = "real"
@@ -104,6 +112,14 @@ class JudgeConfig:
     stage_b_authorized: bool = False
     cache_dir: str = "tasks/japan_fp/judge/cache"
     ledger_path: str = "runs/ledger/judge_calls.jsonl"
+    #: Hard ceiling on cumulative judge spend, in USD, across the whole ledger.
+    #: None means unbounded, which is what shipped until 2026-08-18 and is the
+    #: defect a review named: ShinkaEvolve's own `max_api_costs` meters only its
+    #: mutation/embedding/novelty/meta calls, and never sees the judge at all.
+    #: A run declared at "$2.00" could therefore spend $2.00 of mutation plus an
+    #: unbounded amount of judge. Set by run_evo.py from judge_max_cost_usd, and
+    #: enforced in _assert_within_budget BEFORE each uncached call.
+    max_cost_usd: Optional[float] = None
     #: Models that reject the `temperature` parameter outright (HTTP 400).
     #: Matched by prefix, so "gpt-5" covers the whole 5.x series.
     #:
@@ -150,7 +166,20 @@ class JudgeConfig:
         import yaml  # imported here so the mock path has no hard dependency
 
         with config_path.open("r", encoding="utf-8") as handle:
-            return cls.from_mapping(yaml.safe_load(handle) or {})
+            config = cls.from_mapping(yaml.safe_load(handle) or {})
+
+        # The spend ceiling comes from the RUN config, not the judge config,
+        # and reaches this process by environment variable because ShinkaEvolve
+        # executes evaluate.py as a subprocess per candidate -- there is no
+        # other channel from run_evo.py to here. Set by run_evo.py; absent
+        # everywhere else, which leaves the judge unbounded exactly as before.
+        ceiling = os.environ.get("JAPAN_FP_JUDGE_MAX_COST_USD")
+        if ceiling:
+            try:
+                config = replace(config, max_cost_usd=float(ceiling))
+            except (TypeError, ValueError):
+                pass
+        return config
 
     @property
     def sends_temperature(self) -> bool:
@@ -357,6 +386,7 @@ class JudgeClient:
             return verdict
 
         self._assert_real_calls_authorized()
+        self._assert_within_budget()
         payload = self._call_api(scenario_id, scenario_text, prompt_text, portfolio)
         self._write_cache(key, payload)
         self._append_ledger(key, scenario_id, payload)
@@ -381,6 +411,44 @@ class JudgeClient:
                 f"provider {self.config.provider!r} has no implemented backend; "
                 f"supported: {', '.join(SUPPORTED_PROVIDERS)}. Choosing the judge "
                 "model is an M0 decision (RESEARCH_DESIGN section 8)."
+            )
+
+    def spent_usd(self) -> float:
+        """Cumulative judge spend from the ledger. The ledger is the record of
+        truth: it is append-only, survives process restarts, and is the same
+        file the run summary reports from."""
+        path = self.ledger_path
+        if not path.is_file():
+            return 0.0
+        total = 0.0
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    try:
+                        total += float(json.loads(line).get("cost_usd", 0.0))
+                    except (ValueError, TypeError):
+                        continue
+        except OSError:
+            return 0.0
+        return total
+
+    def _assert_within_budget(self) -> None:
+        """Stop BEFORE the call that would breach the ceiling, not after.
+
+        Checked against the ledger rather than an in-process counter, because a
+        run is many processes: ShinkaEvolve executes evaluate.py as a
+        subprocess per candidate, so an in-memory total would reset to zero on
+        every single evaluation and enforce nothing.
+        """
+        ceiling = self.config.max_cost_usd
+        if ceiling is None:
+            return
+        spent = self.spent_usd()
+        if spent >= float(ceiling):
+            raise JudgeBudgetExceeded(
+                f"Refusing the judge call: ${spent:.4f} already spent against a "
+                f"ceiling of ${float(ceiling):.2f} (ledger {self.ledger_path}). "
+                f"Raise judge_max_cost_usd deliberately, or stop the run."
             )
 
     # -- the one place that touches the network ----------------------------

@@ -1,14 +1,16 @@
 name: Pilot — the first real evolutionary run
 
 # The first run where LLMs actually write policy and a real judge scores it.
-# Ceiling $2.00, enforced by ShinkaEvolve's own max_api_costs, and the run stops
-# itself when it hits that regardless of generations remaining.
 #
-# The pilot uses gpt-4.1-nano alone. Exploration is bounded by evaluation COUNT,
-# not by the eloquence of any single proposal, and nano buys 4.5x the coverage
-# per dollar: ~215 evaluations for $2 against ~48 on gpt-4.1. A malformed
-# candidate costs only the mutation call, because the validity gate rejects it
-# before any judge call is spent.
+# Two ceilings, because one was never enough. ShinkaEvolve's max_api_costs
+# ($1.00) meters only its OWN calls; judge_max_cost_usd ($1.00) is enforced in
+# judge/client.py against the ledger before each uncached call. All-in $2.00.
+#
+# Mixed tier, on measurement: preflight 32086108143 put 3 attempts through each
+# model against the real gate and got nano 33%, gpt-4.1 100%. Nano still wins
+# per VALID individual -- $0.0120 against $0.0409, so 167 evaluations per $2
+# against 49 -- because a rejected candidate costs only the mutation call, the
+# validity gate having refused it before any judge call is spent.
 #
 # What comes back is the point: an archive, a trajectory, a novelty report, and
 # a corpus of the judge's causal mechanism sentences.
@@ -66,7 +68,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt openai
-          python -m pip install "git+https://github.com/SakanaAI/ShinkaEvolve.git"
+          # PINNED. An unpinned install means the engine can change between
+          # two runs of the same config, which would silently break
+          # reproducibility and the matched-budget comparison. This is the
+          # commit whose parents.py::sample_parent dispatch table our
+          # configs were validated against.
+          python -m pip install "git+https://github.com/SakanaAI/ShinkaEvolve.git@6ec47cdddf2f7aea64848d872b8d9a1f7ce17bcd"
 
       - name: Offline test suite must pass first
         run: python -m pytest -q

@@ -320,6 +320,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         encoding="utf-8",
     )
     print(f"Wrote {out_dir / 'mutation_smoke.json'}")
+
+    # Exit non-zero when NO model can clear the gate. Until 2026-08-18 this
+    # returned 0 even while printing "NONE of the configured mutation models
+    # can produce a valid individual" -- so the workflow step went green on the
+    # single result that most clearly forbids running the pilot.
+    #
+    # The bar is deliberately "at least one model works", not "every model
+    # works": a partial rate is a budget fact, not a blocker, because
+    # ShinkaEvolve feeds the gate's reason string back and retries.
+    if not usable:
+        print()
+        print("BLOCKING: no configured mutation model produced a valid "
+              "individual. The pilot would spend its ceiling on gate "
+              "rejections.")
+        return 1
     return 0
 
 

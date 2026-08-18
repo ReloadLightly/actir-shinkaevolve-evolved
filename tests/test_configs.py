@@ -196,11 +196,24 @@ def test_meta_and_novelty_models_are_recorded_against_the_judge(configs, judge_m
 
 # --------------------------------------------------------------------------
 # Hard rule 4: cost ceilings
+#
+# CORRECTED 2026-08-18. Every budget test below used to read
+# `evo_config.max_api_costs`, which meters only ShinkaEvolve's OWN calls --
+# mutation, embedding, novelty, meta. The judge is an external client the
+# engine never sees, at three calls per scored candidate. So the suite was
+# policing roughly half of the real spend and reporting the project as within
+# budget on that half. `_allin` is the number that actually binds.
 # --------------------------------------------------------------------------
 
 
+def _allin(config) -> float:
+    """Everything one run may spend: engine-metered plus judge."""
+    return (float(_evo(config)["max_api_costs"])
+            + float(config["judge_max_cost_usd"]))
+
+
 def test_pilot_ceiling_matches_kickoff(configs):
-    assert _evo(configs["pilot.yaml"])["max_api_costs"] <= CEILING_PILOT
+    assert _allin(configs["pilot.yaml"]) <= CEILING_PILOT
 
 
 def test_every_config_declares_a_ceiling(configs):
@@ -208,6 +221,17 @@ def test_every_config_declares_a_ceiling(configs):
         ceiling = _evo(config).get("max_api_costs")
         assert ceiling is not None, f"{name} declares no max_api_costs"
         assert ceiling > 0, f"{name} has a non-positive ceiling"
+        judge = config.get("judge_max_cost_usd")
+        assert judge is not None, (
+            f"{name} declares no judge_max_cost_usd. ShinkaEvolve does not "
+            "meter the judge, so without this the run is unbounded."
+        )
+        assert judge > 0, f"{name} has a non-positive judge ceiling"
+        allin = config.get("run_max_cost_usd")
+        assert allin is not None, f"{name} declares no run_max_cost_usd"
+        assert allin >= ceiling + judge - 1e-9, (
+            f"{name} declares an all-in ceiling below its own parts"
+        )
 
 
 def test_the_stage_d_run_set_fits_its_ceiling(configs):
@@ -215,7 +239,7 @@ def test_the_stage_d_run_set_fits_its_ceiling(configs):
     total = 0.0
     for name in STAGE_D_RUN_SET:
         assert name in configs, f"STAGE_D_RUN_SET names a missing config: {name}"
-        total += _evo(configs[name])["max_api_costs"]
+        total += _allin(configs[name])
     assert total <= CEILING_STAGE_D_TOTAL, (
         f"Stage D run set totals ${total:.2f}, over its ${CEILING_STAGE_D_TOTAL:.2f} "
         "share. Hard rule 4 forbids raising a ceiling, so the fix is fewer runs "
@@ -225,8 +249,8 @@ def test_the_stage_d_run_set_fits_its_ceiling(configs):
 
 def test_phase_1_fits_the_working_budget(configs):
     """The plan, not the ceiling. $20 is what we intend to spend."""
-    pilot = _evo(configs["pilot.yaml"])["max_api_costs"]
-    phase1 = sum(_evo(configs[n])["max_api_costs"] for n in PHASE_1_RUN_SET)
+    pilot = _allin(configs["pilot.yaml"])
+    phase1 = sum(_allin(configs[n]) for n in PHASE_1_RUN_SET)
     reserves = RESERVE_M1 + RESERVE_M4_JUDGE_SWAP + RESERVE_CONTINGENCY
     total = pilot + phase1 + reserves
     assert total <= WORKING_BUDGET, (
@@ -247,8 +271,8 @@ def test_the_whole_project_fits_the_project_ceiling(configs):
     of the run set, not additional runs. Swapping one in for another keeps the
     total unchanged, which is why the spares carry a matched ceiling.
     """
-    pilot = _evo(configs["pilot.yaml"])["max_api_costs"]
-    stage_d = sum(_evo(configs[name])["max_api_costs"] for name in STAGE_D_RUN_SET)
+    pilot = _allin(configs["pilot.yaml"])
+    stage_d = sum(_allin(configs[name]) for name in STAGE_D_RUN_SET)
     reserves = RESERVE_M1 + RESERVE_M4_JUDGE_SWAP + RESERVE_CONTINGENCY
     total = pilot + stage_d + reserves
     assert total <= PROJECT_CEILING, (

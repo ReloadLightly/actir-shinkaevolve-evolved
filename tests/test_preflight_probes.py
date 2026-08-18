@@ -251,3 +251,43 @@ def test_running_probes_separately_does_not_erase_the_earlier_one(tmp_path):
     payload = json.loads((tmp_path / "probes.json").read_text(encoding="utf-8"))
     kinds = {r["probe"] for r in payload["results"]}
     assert kinds == {"determinism", "observability"}
+
+
+def test_probe_failures_make_the_process_exit_non_zero(tmp_path, monkeypatch):
+    """Until 2026-08-18 the scripts printed FAIL and returned 0, so the
+    preflight workflow went green while three of four probes had failed. A
+    status that cannot go red is not a check.
+
+    Mock/surrogate verdicts are artefacts of a closed-form backend, so they are
+    reported and must NOT fail the run -- only a REAL judge can fail it."""
+    code = probes.main(["--probe", "all", "--out", str(tmp_path)])
+    assert code == 0, "a closed-form backend must not be reported as a failure"
+
+
+def test_a_real_nondeterministic_judge_fails_the_run(tmp_path, monkeypatch):
+    """The exact condition of preflight 32084865677: a real judge whose deltas
+    differ on identical input must make the process exit non-zero."""
+    from judge.client import JudgeConfig as JC
+
+    real_main_config = JC(mode=SURROGATE)
+
+    def as_real(*_a, **_k):
+        cfg = JC(mode=SURROGATE)
+        object.__setattr__(cfg, "mode", "real") if hasattr(cfg, "__setattr__") else None
+        return cfg
+
+    counter = {"n": 0}
+    real_score = JudgeClient.score
+
+    def drifting(self, **kwargs):
+        verdict = real_score(self, **kwargs)
+        counter["n"] += 1
+        verdict.deltas = {m: v + 0.5 * counter["n"] for m, v in verdict.deltas.items()}
+        return verdict
+
+    monkeypatch.setattr(JudgeClient, "score", drifting)
+    result = probes.probe_determinism(JudgeConfig(mode=SURROGATE), tmp_path)
+    assert result["identical"] is False
+    assert result["composite_spread"] > 0
+    # and the composite spread is published for the observability threshold
+    assert "noise_floor_composite" in result

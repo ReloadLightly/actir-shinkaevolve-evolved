@@ -1,3 +1,27 @@
+# All-in ceilings and the matching key, set 2026-08-18 after review.
+#
+# TWO ceilings, because one was never enough. evo_config.max_api_costs meters
+# only ShinkaEvolve's OWN calls (mutation, embedding, novelty, meta). The judge
+# is an external client the engine never sees, at 3 calls per scored candidate,
+# so a run declared at $X could spend $X of mutation plus an unbounded amount of
+# judge on top. judge/client.py enforces judge_max_cost_usd against the ledger
+# before each uncached call; run_evo.py refuses to start without both keys.
+#
+# The arithmetic that has to close, with the judge finally counted:
+#   phase 1  pilot 2.00 + 2 arms x 6.50 + reserves 4.00 = $19.00  (<= $20 working)
+#   phase 2  pilot 2.00 + 6 arms x 6.50 + reserves 4.00 = $45.00  (<= $50 hard)
+#
+# MATCHING. Dollars and generations are both the wrong key for comparing arms:
+# a dollar buys a different number of scored candidates depending on which model
+# UCB1 happens to favour, and a generation may produce nothing the gate accepts.
+# Arms are compared on their first matched_valid_evaluations successful
+# evaluations; the dollar ceilings are safety rails, not the comparison. 150 is
+# RESEARCH_DESIGN section 4's own figure, and is reachable under both extremes
+# ($1.80 at pure nano, $6.14 at pure gpt-4.1).
+judge_max_cost_usd: 3.50
+run_max_cost_usd: 6.50
+matched_valid_evaluations: 150
+
 # Ablation: ensemble_single. Matched budget to configs/main.yaml; one mechanism changed.
 # Parameters from RESEARCH_DESIGN section 3, adapted to ShinkaEvolve's config
 # schema. The judge is configured separately in configs/judge.yaml and is never
@@ -36,7 +60,7 @@ evo_config:
   patch_types: [diff, full, cross]
   patch_type_probs: [0.6, 0.3, 0.1]
   num_generations: 700
-  max_api_costs: 7.00                 # phase 1 of docs/BUDGET.md
+  max_api_costs: 3.00                 # phase 1 of docs/BUDGET.md
   max_patch_resamples: 3
   max_patch_attempts: 1
   max_novelty_attempts: 1

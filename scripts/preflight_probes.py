@@ -441,6 +441,43 @@ def main(argv: Optional[List[str]] = None) -> int:
     }
     written.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"\nWrote {_display(written)}")
+
+    # Exit non-zero when a probe FAILS. Until 2026-08-18 this returned 0
+    # unconditionally: the scripts printed "FAIL" in the log while the workflow
+    # step went green, and the run's overall status said success while three of
+    # four probes had failed. A status that cannot go red is not a check.
+    #
+    # Under mock/surrogate the verdicts are artefacts of a closed-form backend
+    # (determinism passes trivially, observability reports blindness to
+    # everything), so they are reported and NOT treated as failures.
+    failures = []
+    if config.mode == REAL:
+        for entry in results:
+            if entry.get("probe") == "determinism" and not entry.get("identical"):
+                failures.append(
+                    f"determinism: deltas vary by up to "
+                    f"{entry.get('max_spread', 0):.3f} on identical input "
+                    f"(composite {entry.get('composite_spread', 0):.4f})")
+            if entry.get("probe") == "observability":
+                if not entry.get("calibrated"):
+                    failures.append(
+                        "observability: UNCALIBRATED — no determinism result, so "
+                        "no shift can be told from the judge's own noise")
+                elif entry.get("blind_to"):
+                    failures.append(
+                        f"observability: judge is blind to "
+                        f"{', '.join(entry['blind_to'])}")
+                elif entry.get("not_established"):
+                    failures.append(
+                        f"observability: NOT ESTABLISHED for "
+                        f"{', '.join(entry['not_established'])} — shifts are the "
+                        f"size of the judge's self-noise")
+    if failures:
+        print()
+        print("PROBE FAILURES (this run is not green):")
+        for line in failures:
+            print(f"  - {line}")
+        return 1
     return 0
 
 
