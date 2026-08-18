@@ -68,7 +68,7 @@ strategy from the one it currently encodes. Change the allocation substantially 
 Hard requirements, all checked by an automatic validity gate before your work is \
 scored:
 
-1. The 30 `share` values must sum to EXACTLY 1.0. Check your arithmetic.
+1. The 30 `share` values are proportions of one finite effort budget and are normalised automatically, so their absolute sum does not matter - but the trade-off does: raising one dial must come at the expense of others.
 2. Use only the dial names already present. They are the Lowy Index's own 30 \
 submeasures and no others exist.
 3. Every dial with a share above 0 needs a non-empty `how` string of at most \

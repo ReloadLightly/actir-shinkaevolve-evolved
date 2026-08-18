@@ -209,11 +209,28 @@ def op_initiative(portfolio: PolicyPortfolio, rng: random.Random) -> str:
 
 
 def op_break_invariant(portfolio: PolicyPortfolio, rng: random.Random) -> str:
-    """Deliberately invalid, so the gate's rejection path is exercised too."""
+    """Deliberately invalid, so the gate's rejection path is exercised too.
+
+    Every mode here has to survive share *repair*. The gate rescales an
+    off-sum allocation rather than rejecting it (shares are a normalisation
+    convention -- see GateLimits.share_sum_repair_min), so this operator's
+    original trick of adding 0.3 to one dial is no longer a violation at all.
+    What remains genuinely invalid is a claim the portfolio should not be able
+    to make: a dial that does not exist, a negative allocation, a sum too far
+    off to be arithmetic, or text past the cap.
+    """
     dials = portfolio.dials
     victim = rng.choice(list(dials))
-    portfolio.invest(victim, share=dials[victim].share + rng.uniform(0.2, 0.5),
-                     how=dials[victim].how)
+    mode = rng.choice(("unknown_dial", "negative_share", "absurd_sum", "long_how"))
+    if mode == "unknown_dial":
+        portfolio.invest("soft_power.not_a_lowy_dial", share=0.0, how="not a dial")
+    elif mode == "negative_share":
+        portfolio.invest(victim, share=-rng.uniform(0.05, 0.4), how=dials[victim].how)
+    elif mode == "absurd_sum":
+        portfolio.invest(victim, share=dials[victim].share + rng.uniform(4.0, 9.0),
+                         how=dials[victim].how)
+    else:
+        portfolio.invest(victim, share=dials[victim].share, how="x" * 400)
     return "break_invariant"
 
 

@@ -250,6 +250,13 @@ def _canonical(payload: Mapping[str, Any]) -> str:
 class JudgeClient:
     """Content-hash-cached client for the frozen judge.
 
+    "Frozen" is about configuration, not output. The 2026-08-18 preflight
+    measured this judge returning different deltas for byte-identical input at
+    temperature 0 (spread up to 1.000 per measure, 0.17 on the composite, one
+    sign flip). So the cache is an audit trail and a cost control -- it records
+    and replays the draw that was actually used -- and is NOT a determinism
+    guarantee. Do not describe a cache hit as a reproduction.
+
     Usage::
 
         client = JudgeClient(JudgeConfig.load())

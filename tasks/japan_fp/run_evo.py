@@ -42,7 +42,7 @@ Fitness is Japan's projected Lowy composite in 2030, averaged over three fixed s
 
 What actually moves the score:
 
-1. Shares must sum to 1.0 exactly. Reallocating means taking effort from somewhere.
+1. Shares are proportions of one finite budget of effort, and are normalised for you - so do not spend effort on arithmetic, spend it on the allocation. What matters is the trade-off: raising one dial must lower others, because there is no more effort to be had.
 2. Effort is not achievement. An evaluator judges, per scenario, whether the effort plausibly moves the measure - including backfire, where effort on one measure lowers another. You cannot buy index points directly.
 3. Japan starts at 85.4 on diplomatic influence and 11.3 on future resources. Returns diminish sharply where Japan is already strong.
 4. The three scenarios reward different things. A portfolio tuned to one may collapse in another; the worst-case composite is reported alongside the mean.

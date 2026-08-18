@@ -34,12 +34,92 @@ def test_seed_invests_in_all_thirty_dials_and_sums_to_one():
     assert portfolio.total_share() == pytest.approx(1.0, abs=1e-9)
 
 
-def test_rejects_shares_that_do_not_sum_to_one():
+# --------------------------------------------------------------------------
+# Share normalisation: repaired inside the band, rejected outside it.
+#
+# The preflight run of 2026-08-18 measured gpt-4.1-nano summing its 30 shares
+# to 0.670000 and being rejected for it -- 0/1 models produced a portfolio the
+# gate accepted, which would have spent the pilot's entire ceiling on gate
+# failures. Shares are a normalisation convention (only proportions carry
+# policy meaning), so the gate now rescales rather than rejects. These tests
+# pin both halves of that contract: what gets repaired, and what still does not.
+# --------------------------------------------------------------------------
+
+
+def test_repairs_shares_that_merely_fail_to_sum_to_one():
     portfolio = _valid_portfolio()
     portfolio.invest(
         "economic_capability.size", share=0.30, how="over-allocated on purpose"
     )
-    assert "shares must sum to 1.0" in _reasons_for(portfolio)
+    raw = portfolio.total_share()
+    assert raw != pytest.approx(1.0, abs=1e-6), "the fixture must be off-sum"
+
+    valid, reasons = validity_gate(portfolio)
+    assert valid, f"an in-band sum must be repaired, not rejected: {reasons}"
+    assert portfolio.shares_repaired is True
+    assert portfolio.raw_share_sum == pytest.approx(raw)
+    assert portfolio.total_share() == pytest.approx(1.0, abs=1e-9)
+
+
+def test_repair_preserves_the_proportions_it_rescales():
+    """Repair must not change what the portfolio *says*, only its scale."""
+    portfolio = _valid_portfolio()
+    portfolio.invest("economic_capability.size", share=0.30, how="over-allocated")
+    before = {k: d.share for k, d in portfolio.dials.items()}
+    raw = portfolio.total_share()
+
+    validity_gate(portfolio)
+
+    after = {k: d.share for k, d in portfolio.dials.items()}
+    assert set(before) == set(after)
+    for dial_id, share in before.items():
+        assert after[dial_id] == pytest.approx(share / raw, abs=1e-12)
+
+
+def test_the_nano_failure_from_the_preflight_now_passes():
+    """The exact observed failure: 30 shares summing to 0.670000."""
+    portfolio = _valid_portfolio()
+    factor = 0.67 / portfolio.total_share()
+    scaled = [(d.dial_id, d.share * factor, d.how) for d in portfolio.dials.values()]
+    rebuilt = PolicyPortfolio(horizon=(2026, 2030))
+    for dial_id, share, how in scaled:
+        rebuilt.invest(dial_id, share=share, how=how or "placeholder")
+    rebuilt.sequence(portfolio.phases)
+    rebuilt.custom_initiatives(portfolio.initiatives)
+    rebuilt.defence_spending_path(portfolio.defence_path)
+    assert rebuilt.total_share() == pytest.approx(0.67, abs=1e-9)
+
+    valid, reasons = validity_gate(rebuilt)
+    assert valid, f"the preflight's nano output must now pass: {reasons}"
+    assert rebuilt.shares_repaired is True
+
+
+def test_rejects_a_sum_too_far_off_to_be_arithmetic():
+    """Outside the band it is an incoherent allocation, not a slipped sum."""
+    portfolio = PolicyPortfolio(horizon=(2026, 2030))
+    portfolio.invest("economic_capability.size", share=9.0, how="wildly out of band")
+    portfolio.sequence([Phase(label="only", years=(2026, 2030), focus=())])
+    reasons = _reasons_for(portfolio)
+    assert "shares must sum to 1.0" in reasons
+    assert portfolio.shares_repaired is False
+
+
+def test_negative_shares_are_never_repaired_away():
+    """A negative share is a real error; rescaling would hide it."""
+    portfolio = _valid_portfolio()
+    portfolio.invest("economic_capability.size", share=-0.20, how="negative")
+    reasons = _reasons_for(portfolio)
+    assert "must be within [0, 1]" in reasons
+    assert portfolio.shares_repaired is False
+
+
+def test_a_correct_sum_is_left_completely_alone():
+    portfolio = _valid_portfolio()
+    before = {k: d.share for k, d in portfolio.dials.items()}
+    valid, _ = validity_gate(portfolio)
+    assert valid
+    assert portfolio.shares_repaired is False
+    assert {k: d.share for k, d in portfolio.dials.items()} == before
 
 
 def test_rejects_unknown_dial_names():
@@ -178,7 +258,10 @@ def test_collects_every_violation_rather_than_the_first():
     """The mutation LLM gets all reasons at once; one per generation is too slow."""
     portfolio = PolicyPortfolio(horizon=(2026, 2040))
     portfolio.invest("not.a_dial", share=0.5, how="")
+    # A negative share is out of repair scope, so the sum violation survives
+    # to be reported alongside the others rather than being rescaled away.
+    portfolio.invest("economic_capability.size", share=-0.5, how="negative")
     portfolio.sequence([])
     valid, reasons = validity_gate(portfolio)
     assert not valid
-    assert len(reasons) >= 4
+    assert len(reasons) >= 4, reasons

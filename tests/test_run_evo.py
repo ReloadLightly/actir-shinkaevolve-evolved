@@ -204,7 +204,16 @@ def test_the_mutation_prompt_states_the_binding_constraints():
     """These are the constraints the validity gate enforces for free. A prompt
     that omits them spends generations on portfolios the gate rejects."""
     prompt = run_evo.TASK_SYS_MSG
-    assert "sum to 1.0" in prompt
+    # The prompt used to demand shares "sum to 1.0 exactly". The 2026-08-18
+    # preflight showed gpt-4.1-nano summing 30 terms to 0.67 and failing the
+    # gate 1/1 times, so the gate now normalises and the prompt asks for the
+    # thing that actually carries meaning: the trade-off. Asserting on the
+    # arithmetic wording again would re-introduce the burden that broke nano.
+    assert "normalised" in prompt, "models must be told not to do the arithmetic"
+    assert "trade-off" in prompt, "the binding constraint is the trade-off"
+    assert "at the expense of" in prompt or "lower others" in prompt, (
+        "the prompt must say that raising one dial lowers others"
+    )
     assert "38.8" in prompt, "the number to beat must be stated"
     assert "30 submeasures" in prompt
 
