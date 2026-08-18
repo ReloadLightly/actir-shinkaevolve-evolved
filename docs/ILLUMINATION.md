@@ -83,10 +83,47 @@ QD score  MAP-Elites 1287           fitness 902
 
 **6/6 seeds, mean advantage 1.43×, non-overlapping error bars.**
 
-This is on the surrogate judge, so the numbers are structure and not a finding
-about Japan. What it establishes is about the *machinery*: switching the
-selection rule buys ~43% more of the policy space at identical cost, and the
-effect is not seed luck.
+> ## ⚠ RETRACTED, 2026-08-18
+>
+> **This comparison had no null model, and against one the result inverts.**
+>
+> The 1.43× is real but it is measured against the *fitness-driven control*
+> only. A review pointed out that the random-search baseline could not run —
+> `parent_selection_strategy: random` is not a strategy ShinkaEvolve
+> dispatches — so the arm that was supposed to provide the null had never
+> executed, and nobody had noticed because `--dry-run` reported it valid.
+>
+> `scripts/random_baseline.py` now implements the null properly, outside the
+> engine, because a genuinely blind baseline cannot be expressed inside it.
+> Matched on **valid** evaluations, 6 seeds, same grid, same surrogate judge:
+>
+> | arm | coverage | QD score |
+> |---|---|---|
+> | MAP-Elites | 28.9% ± 2.8% | 763 |
+> | fitness-driven control | 22.1% ± 4.8% | 585 |
+> | **random draw** | **50.5% ± 3.9%** | **1334** |
+>
+> And at every budget tested — 150, 400, 900 valid evaluations — random wins
+> (52.1% / 64.1% / 72.4% against 29.7% / 50.5% / 68.8%). The gap narrows and
+> never closes.
+>
+> The reason is not subtle: MAP-Elites starts at the December 2022 seed and
+> mutates locally, so it walks outward. Uniform simplex sampling lands
+> everywhere at once. On a 2-D projection of a 30-D allocation, spreading out
+> is easy, and the method with no memory does it best.
+>
+> **The lesson is about the metric.** Coverage of a low-dimensional behaviour
+> grid cannot be a headline result when a trivial null beats a real algorithm
+> on it. What random draw *cannot* do is produce portfolios anyone would read
+> as a strategy — its allocations are arbitrary and its rationales are the
+> seed's, detached from the allocations they were written for. It fills cells
+> with noise. So the surviving claim must be about **coherent** diversity,
+> which is not yet measured. See `docs/REVIEW_RESPONSE.md`.
+
+The numbers above are on the surrogate judge, so they are structure and not a
+finding about Japan. What the comparison establishes is narrower than it was
+first written to be: switching the selection rule beats *fitness-driven
+selection*, and loses to *not searching at all*.
 
 ## What it does not do
 

@@ -152,6 +152,26 @@ def composite(scores: Dict[str, float]) -> float:
     return sum(WEIGHTS[m] * float(scores[m]) for m in MEASURES)
 
 
+# --------------------------------------------------------------------------
+# MODELLING ASSUMPTION, stated 2026-08-18 after review.
+#
+# Lowy's Asia Power Index is a RELATIVE, distance-to-frontier comparison across
+# 27 countries and 131 indicators: a country's score depends on where every
+# other country sits. https://power.lowyinstitute.org/methodology/
+#
+# What we do below is NOT that procedure. We add an LLM-estimated delta to
+# Japan's fixed 2025 measure scores and re-apply Lowy's published weights, with
+# all 26 other countries held implicit and unchanged. Only the WEIGHTS are
+# genuinely Lowy's; the projection is ours.
+#
+# So a number out of composite_with_deltas is "Japan's 2030 composite under our
+# model of how this portfolio moves Japan's own measures", and must never be
+# reported as "Japan's projected Lowy score". In particular it cannot capture
+# the relative effects that dominate a real Index movement -- China slowing,
+# India rising, a partner's capability shifting the frontier.
+# --------------------------------------------------------------------------
+
+
 def composite_with_deltas(deltas: Dict[str, float]) -> float:
     """composite(s) = sum_m w_m * clip(b_m + delta_m, 0, 100).
 
