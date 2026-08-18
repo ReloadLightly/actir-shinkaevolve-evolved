@@ -1,10 +1,47 @@
-# Budget: USD 15 for the whole project
+# Budget: USD 20 working, USD 50 hard ceiling
 
-Roland set the total project budget at **USD 15** on 2026-08-17. This
-supersedes the per-stage figures in `KICKOFF.md`, which total 261 (Stage B 1,
-Stage C 10, Stage D 250). **Where KICKOFF and this number disagree, this one
-wins.** KICKOFF is left unedited as the original spec; the supersession is
-recorded here and in `DECISIONS.md`.
+Roland raised the hard ceiling to **USD 50** on 2026-08-17, and immediately
+added the qualification that matters: *"$50 is my ceiling, I never said that I
+WANT to spend that much."* So the plan is **USD 20**, staged, with the rest
+reachable only if phase 1 earns it.
+
+Both numbers are enforced. `tests/test_configs.py` carries `WORKING_BUDGET =
+20.0` for what phase 1 may authorise and `PROJECT_CEILING = 50.0` as the hard
+limit nothing may exceed.
+
+| | Ceiling | Arms | Evaluations each |
+|---|---|---|---|
+| **Phase 1** — authorised | $20.00 | main + random-search baseline | ~168–755 |
+| **Phase 2** — only if phase 1 earns it | $48.00 total | + hill-climbing, parent, ensemble, novelty | matched |
+
+**Phase 1 is two arms, deep, not six arms, thin.** That pair *is* the RQ3
+comparison — "does the machinery hold diversity, an option map rather than one
+answer?" — and novelty discovery needs one archive with enough evaluations to
+populate the space. Six archives of 57 evaluations would contain nothing.
+
+## Cheap models, because the target is coverage
+
+The mutation model dominates cost, and for *exploration* the thing that matters
+is how many evaluations happen, not how eloquent any single proposal is.
+
+| Mutation model | $/proposal | $/evaluation | Evaluations per $7 arm |
+|---|---|---|---|
+| `gpt-4.1` | $0.0340 | $0.0416 | 168 |
+| `gpt-4.1-nano` | $0.0017 | **$0.0093** | **755** |
+
+**4.5× the coverage for the same money.** And the downside of a cheap model is
+smaller than it looks: a candidate whose 30 shares do not sum to 1.0 is rejected
+by the validity gate *before any judge call is spent*, so a miss costs $0.0017
+rather than $0.0093.
+
+The pilot therefore runs `gpt-4.1-nano` alone — it is a smoke test, not an
+experimental arm, and 215 evaluations tells us far more than 48. The Stage D
+arms keep both tiers, because RESEARCH_DESIGN §3 asks for a mixed ensemble and
+the UCB1 bandit needs something to choose between.
+
+`num_generations` is now set generously (700 on the arms) so that
+`max_api_costs` is the binding constraint. A cheap ensemble then runs *longer*
+for the same money instead of stopping early at an arbitrary generation count.
 
 `tests/test_configs.py` enforces the 15 as `PROJECT_CEILING`. It is the check
 that would have caught the original configs, which authorised **USD 290**

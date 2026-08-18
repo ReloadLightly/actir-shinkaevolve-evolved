@@ -1,0 +1,33 @@
+{
+  "surrogate": true,
+  "not_a_result": "Surrogate-scored. Structure only; never report these numbers.",
+  "axes": [
+    {
+      "name": "hard_power",
+      "low": 0.0,
+      "high": 0.5,
+      "meaning": "effort on military capability \u2014 accommodation at one end, autonomous rearmament at the other"
+    },
+    {
+      "name": "alliance_reliance",
+      "low": 0.0,
+      "high": 0.3,
+      "meaning": "effort on defence networks \u2014 security bought through Washington and its partner lattice, versus built at home"
+    }
+  ],
+  "bins": 8,
+  "evaluations": 600,
+  "seed": 0,
+  "mapelites": {
+    "coverage": 0.5625,
+    "qd_score": 1485.9411166666669,
+    "cells_filled": 36,
+    "cells_total": 64
+  },
+  "fitness_driven": {
+    "coverage": 0.375,
+    "qd_score": 991.3154683333332,
+    "cells_filled": 24
+  },
+  "coverage_ratio": 1.5
+}

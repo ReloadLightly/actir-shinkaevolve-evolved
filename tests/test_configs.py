@@ -31,35 +31,50 @@ ABLATION_DIR = CONFIG_DIR / "ablations"
 # Cost ceilings, USD. Hard rule 4 says a ceiling may never be raised, so these
 # are read-only from our side.
 #
-# **PROJECT_CEILING is the binding one.** Roland set the whole-project budget at
-# USD 15 on 2026-08-17, superseding the per-stage figures written into KICKOFF
+# **PROJECT_CEILING is the binding one.** Roland raised the whole-project budget to
+# USD 50 on 2026-08-17 (from 15, itself down from KICKOFF's 261), superseding the per-stage figures written into KICKOFF
 # (Stage B 1, Stage C 10, Stage D 250 — which total 261). Where KICKOFF and this
 # number disagree, the smaller wins. See docs/BUDGET.md.
-PROJECT_CEILING = 15.0
+PROJECT_CEILING = 50.0     # HARD ceiling. Never exceed, never raise.
+WORKING_BUDGET = 20.0      # What we actually plan to spend. A ceiling is not
+                           # a target: phase 2 happens only if phase 1 earns it.
 
 CEILING_M1 = 1.0            # KICKOFF Stage B; the real M1 estimate is ~0.19
-CEILING_PILOT = 1.0         # re-cut from KICKOFF's 10 to fit PROJECT_CEILING
-CEILING_STAGE_D_TOTAL = 12.0  # re-cut from KICKOFF's 250
+CEILING_PILOT = 2.0         # raised with the ceiling, 2026-08-17
+CEILING_STAGE_D_TOTAL = 42.0  # against the hard ceiling, not the plan
 
 #: Reserved outside the search runs: M1 calibration, the M4 judge-swap
 #: re-scoring of the top-20 archive, and contingency.
 RESERVE_M1 = 0.25
-RESERVE_M4_JUDGE_SWAP = 0.50
-RESERVE_CONTINGENCY = 1.25
+RESERVE_M4_JUDGE_SWAP = 2.00
+RESERVE_CONTINGENCY = 1.75
 
 #: The runs RESEARCH_DESIGN §4 actually calls for at Stage D: the main run, two
 #: baselines (random search and hill climbing), and three ablations — one per
 #: mechanism. Six runs. The ablation directory holds more configs than this,
 #: because each mechanism has two variants; which variant runs is a decision,
 #: and this list is where that decision is recorded.
-STAGE_D_RUN_SET: List[str] = [
+#: PHASE 1 — what $20 buys, and the only thing currently authorised. Two arms,
+#: deep: the main run and its matched random-search baseline. That pair IS the
+#: RQ3 comparison ("does the machinery hold diversity — an option map, not one
+#: answer?"). Depth was chosen over breadth deliberately: novelty discovery
+#: needs one archive with enough evaluations to populate the space, not six
+#: archives too thin to contain anything.
+PHASE_1_RUN_SET: List[str] = [
     "main.yaml",
-    "ablations/parent_hill_climbing.yaml",     # baseline: hill climbing (§4)
     "ablations/random_search.yaml",            # baseline: random search (§4)
+]
+
+#: PHASE 2 — the rest of RESEARCH_DESIGN §4, run only if phase 1 shows the
+#: comparison is worth extending. Costed and matched, but not authorised.
+PHASE_2_RUN_SET: List[str] = [
+    "ablations/parent_hill_climbing.yaml",     # baseline: hill climbing (§4)
     "ablations/parent_best_of_n.yaml",         # ablation 1: parent selection
     "ablations/ensemble_single.yaml",          # ablation 2: ensemble composition
     "ablations/novelty_off.yaml",              # ablation 3: novelty handling
 ]
+
+STAGE_D_RUN_SET: List[str] = PHASE_1_RUN_SET + PHASE_2_RUN_SET
 
 #: Configs that exist as alternatives but are not in the Stage D run set. Listed
 #: explicitly so that a config cannot be silently forgotten *or* silently added.
@@ -205,6 +220,19 @@ def test_the_stage_d_run_set_fits_its_ceiling(configs):
         f"Stage D run set totals ${total:.2f}, over its ${CEILING_STAGE_D_TOTAL:.2f} "
         "share. Hard rule 4 forbids raising a ceiling, so the fix is fewer runs "
         "or lower per-run ceilings — Roland's call, not ours."
+    )
+
+
+def test_phase_1_fits_the_working_budget(configs):
+    """The plan, not the ceiling. $20 is what we intend to spend."""
+    pilot = _evo(configs["pilot.yaml"])["max_api_costs"]
+    phase1 = sum(_evo(configs[n])["max_api_costs"] for n in PHASE_1_RUN_SET)
+    reserves = RESERVE_M1 + RESERVE_M4_JUDGE_SWAP + RESERVE_CONTINGENCY
+    total = pilot + phase1 + reserves
+    assert total <= WORKING_BUDGET, (
+        f"phase 1 authorises ${total:.2f} against the ${WORKING_BUDGET:.2f} "
+        f"working budget (pilot ${pilot:.2f} + arms ${phase1:.2f} + reserves "
+        f"${reserves:.2f}). Phase 2 is where the rest of the ceiling lives."
     )
 
 
@@ -449,12 +477,19 @@ def test_the_judge_itself_accepts_temperature(judge_model):
 
 def test_the_ensemble_spans_more_than_one_price_tier(configs):
     """RESEARCH_DESIGN §3 wants mixed tiers, and the bandit needs something to
-    choose between. `ensemble_single` is the ablation that removes this on
-    purpose, so it is exempt."""
+    choose between.
+
+    Two exemptions. `ensemble_single` ablates exactly this, so requiring it
+    there would be incoherent. And `pilot.yaml` runs a single cheap model on
+    purpose: the pilot's job is to prove the loop runs and fill a first
+    archive, where 215 evaluations on `gpt-4.1-nano` is worth far more than 48
+    on `gpt-4.1`. It is a smoke test, not an experimental arm.
+    """
     from judge.client import PRICING_USD_PER_MTOK as PRICES
 
     for name, config in configs.items():
-        if name == "ablations/ensemble_single.yaml":
+        if name in {"ablations/ensemble_single.yaml",   # ablates this on purpose
+                    "pilot.yaml"}:                     # a smoke test, not an arm
             continue
         tiers = {
             PRICES[m]["input"] for m in _ensemble(config) if m in PRICES
@@ -505,3 +540,102 @@ def test_the_local_template_is_gitignored_once_copied():
     assert "configs/judge.local.yaml" in gitignore, (
         "an armed local config could be committed by accident"
     )
+
+
+# --------------------------------------------------------------------------
+# The archive must be a map, not a leaderboard (docs/ALPHAEVOLVE_COMPARISON.md)
+# --------------------------------------------------------------------------
+
+
+#: The only criterion names ShinkaEvolve's _get_criterion_value can resolve.
+#: Everything else returns 0.0 with a log warning, which would silently add a
+#: constant term to the rank normalisation rather than failing loudly.
+RESOLVABLE_ARCHIVE_CRITERIA = {
+    "combined_score", "loc", "lloc", "complexity", "maintainability", "nesting",
+}
+
+
+def test_archive_criteria_name_only_metrics_shinka_can_resolve(configs):
+    """A criterion the engine cannot resolve is worse than no criterion.
+
+    `_get_criterion_value` special-cases `combined_score` and reads the five
+    code-analysis metrics from program metadata. It never touches
+    `public_metrics`. An unrecognised name returns 0.0 and logs a warning, so a
+    plausible-looking `archive_criteria: {worst_case_composite: 0.5}` would
+    contribute a constant to every program's rank and quietly distort selection
+    while appearing to add diversity pressure.
+
+    This test exists because that is exactly the mistake I made and shipped to
+    a branch before it caught me.
+    """
+    for name, config in configs.items():
+        criteria = config.get("db_config", {}).get("archive_criteria", {})
+        assert criteria, f"{name} declares no archive_criteria"
+        unresolvable = sorted(set(criteria) - RESOLVABLE_ARCHIVE_CRITERIA)
+        assert not unresolvable, (
+            f"{name} names {unresolvable} in archive_criteria; ShinkaEvolve "
+            f"resolves only {sorted(RESOLVABLE_ARCHIVE_CRITERIA)} and returns "
+            "0.0 for anything else"
+        )
+        assert "combined_score" in criteria, (
+            f"{name} dropped the borrowed objective from archive selection"
+        )
+
+
+def test_archive_criteria_are_identical_across_configs(configs):
+    """Otherwise an ablation differs from main in its own mechanism AND in how
+    the archive is kept, and the comparison attributes nothing."""
+    reference = configs["main.yaml"]["db_config"]["archive_criteria"]
+    for name, config in configs.items():
+        assert config["db_config"]["archive_criteria"] == reference, (
+            f"{name} keeps its archive differently from main.yaml"
+        )
+
+
+def test_the_behaviour_descriptors_the_archive_needs_are_public():
+    """`archive_criteria` ranks over PUBLIC metrics only. A descriptor left in
+    `private` is invisible to archive selection, which is where the effort
+    shares used to sit."""
+    import sys as _sys
+
+    task_dir = REPO_ROOT / "tasks" / "japan_fp"
+    if str(task_dir) not in _sys.path:
+        _sys.path.insert(0, str(task_dir))
+    import evaluate as evaluator
+    import initial
+    from judge.client import JudgeClient, JudgeConfig
+    from lowy import MEASURES
+
+    result = evaluator.score_portfolio(
+        initial.build_policy(), client=JudgeClient(JudgeConfig(mode="surrogate"))
+    )
+    public = result["public"]
+    assert "effort_concentration" in public
+    for measure in MEASURES:
+        assert f"effort_{measure}" in public, f"effort_{measure} is not public"
+
+    # The descriptors stay public even though archive_criteria cannot read
+    # them: analysis/novelty.py and analysis/shinka_adapter.py both do, and
+    # they are what turns a finished archive into a map.
+
+
+def test_effort_concentration_is_a_real_herfindahl_index():
+    """1/30 for a perfectly even split, 1.0 for everything on one dial. If the
+    scale were wrong the archive's diversity pressure would be meaningless."""
+    import sys as _sys
+
+    task_dir = REPO_ROOT / "tasks" / "japan_fp"
+    if str(task_dir) not in _sys.path:
+        _sys.path.insert(0, str(task_dir))
+    from lowy import DIALS
+    from schema import PolicyPortfolio
+
+    even = PolicyPortfolio(horizon=(2026, 2030))
+    for dial in DIALS:
+        even.invest(dial, share=1.0 / len(DIALS), how="x")
+    concentrated = PolicyPortfolio(horizon=(2026, 2030))
+    concentrated.invest(DIALS[0], share=1.0, how="x")
+
+    h = lambda p: sum(d.share ** 2 for d in p.dials.values())  # noqa: E731
+    assert h(even) == pytest.approx(1.0 / len(DIALS), abs=1e-9)
+    assert h(concentrated) == pytest.approx(1.0)
