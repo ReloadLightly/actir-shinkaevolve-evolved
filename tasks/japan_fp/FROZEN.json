@@ -1,15 +1,30 @@
 {
-  "version": "0.3.0-m1-corrected",
+  "version": "0.4.0-projectB-model-1.1.0",
   "status": "DRAFT",
-  "recorded_at": "2026-08-17T19:33:35.314868+00:00",
-  "note": "Rubric revision 2 after M1 run 32058962532 (rho=-0.300, signal<noise, rule 5 structurally unfollowable). Adds the three-scenario context block, composite-impact arithmetic, and rules 8-9 (score against December 2022; price what is given up). Scenario texts unchanged. NEEDS ROLAND'S RE-APPROVAL before any scored run.",
+  "recorded_at": "2026-08-19T00:00:00+00:00",
+  "note": "Project B preregistration. world.py, splits.py and instruments.py are hashed BEFORE scripts/qualify_world.py runs, which is the whole defence against the circularity a review identified in the first design draft (\"if adaptive is no better than constant, redesign the world\"). That instruction is deleted. The model and the train/dev/test seeds are fixed first, the preregistered thresholds are written down first, and whatever the gate returns is the result. Model version 1.1.0: v1.0.0 failed and tracing why exposed an independently statable realism defect -- capability was independent of the strategic environment, so defence networks scored the same whether the US was committed or gone. v1.0.0's failing numbers are kept in the record rather than discarded. Any further coefficient change requires a defect statable without reference to which arm it favours, a version bump, and a full rerun.",
   "files": {
     "tasks/japan_fp/scenarios/S1_grinding_status_quo.md": "cc7193676f410d84d37db247eaf8a580d745661a789f91a037c87e434dc8e088",
     "tasks/japan_fp/scenarios/S2_taiwan_contingency.md": "ef8d4cbecc60afa9042736dacd9e2bba1efe13c5e5d3cd30a0459547f6892bac",
     "tasks/japan_fp/scenarios/S3_us_retrenchment.md": "8e7bc666c1e9f2ffbbfac89f246cdef3d656ebfc4a3651aad77544c844af92ad",
-    "tasks/japan_fp/judge_prompt.md": "0990d284f9d82c126b546d12554a6037eaf2501099b3979121b046147bf0727c"
+    "tasks/japan_fp/judge_prompt.md": "0990d284f9d82c126b546d12554a6037eaf2501099b3979121b046147bf0727c",
+    "tasks/japan_fp/world.py": "f5aa5f0bba089f4e4feaab87d61ec8006f9e53934b937d277ee9aff3e30f0ddc",
+    "tasks/japan_fp/splits.py": "2088482cefa028cb20430158234f757cfc2fbc38e16dbfaeb3f9aff9c4b12ade",
+    "tasks/japan_fp/instruments.py": "e335c77c1571c3550ab1e949b771cb6684eb18b8e219ea348d4d9183a9de59cc"
   },
   "history": [
+    {
+      "version": "0.3.0-m1-corrected",
+      "status": "DRAFT",
+      "recorded_at": "2026-08-17T19:33:35.314868+00:00",
+      "note": "Rubric revision 2 after M1 run 32058962532 (rho=-0.300, signal<noise, rule 5 structurally unfollowable). Adds the three-scenario context block, composite-impact arithmetic, and rules 8-9 (score against December 2022; price what is given up). Scenario texts unchanged. NEEDS ROLAND'S RE-APPROVAL before any scored run.",
+      "files": {
+        "tasks/japan_fp/scenarios/S1_grinding_status_quo.md": "cc7193676f410d84d37db247eaf8a580d745661a789f91a037c87e434dc8e088",
+        "tasks/japan_fp/scenarios/S2_taiwan_contingency.md": "ef8d4cbecc60afa9042736dacd9e2bba1efe13c5e5d3cd30a0459547f6892bac",
+        "tasks/japan_fp/scenarios/S3_us_retrenchment.md": "8e7bc666c1e9f2ffbbfac89f246cdef3d656ebfc4a3651aad77544c844af92ad",
+        "tasks/japan_fp/judge_prompt.md": "0990d284f9d82c126b546d12554a6037eaf2501099b3979121b046147bf0727c"
+      }
+    },
     {
       "version": "0.1.0-draft",
       "status": "DRAFT",

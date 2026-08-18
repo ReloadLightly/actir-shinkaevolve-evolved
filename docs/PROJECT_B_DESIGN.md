@@ -28,7 +28,7 @@ Project A could only mitigate this by averaging. Project B fixes it structurally
 
 | | Project A (current) | **Project B** |
 |---|---|---|
-| fitness | LLM judge, noisy, $0.0069/candidate | **exact simulator, deterministic, free** |
+| fitness | LLM judge, noisy, $0.0069/candidate | **deterministic model-based evaluator, free** |
 | mutation operator | LLM | LLM |
 | LLM judge's role | the objective | **validation + qualitative corpus** |
 
@@ -167,21 +167,84 @@ the simulator. Before any spending:
    (say a handful of threshold rules on observed trends) over the same worlds.
 3. Evaluate both on **held-out** worlds.
 
-**The gate:** adaptive must beat best-constant on held-out worlds by more than
-seed-to-seed noise. Report the effect size and the noise band, as
-`docs/PREFLIGHT_FINDINGS.md` does for the judge.
+### ⚠ The circular instruction, deleted
 
-Three outcomes:
+An earlier draft of this section read:
 
-| result | meaning | action |
-|---|---|---|
-| adaptive ≫ constant | the world contains a real search problem | proceed |
-| adaptive ≈ constant | uncertainty resolves too slowly, or inertia is too weak | **redesign the world**, do not proceed |
-| brute force finds the optimum immediately | the space is too small to need evolution | enlarge the instrument set or the horizon |
+> | adaptive ≈ constant | uncertainty resolves too slowly | **redesign the
+> world**, do not proceed |
 
-This is the qualification step the second review asked for, and it costs
-**nothing**. It is also the step most likely to be skipped under deadline
-pressure, which is why it is written here in its own section.
+A review of 2026-08-19 identified that as circular, and it was. It tunes the
+model until the desired answer appears, which makes every subsequent number
+meaningless. **It is deleted.**
+
+What replaces it is preregistration, enforced mechanically:
+
+* `world.py`, `splits.py` and `instruments.py` are **hashed into `FROZEN.json`
+  before `scripts/qualify_world.py` runs**. A post-hoc edit is visible in the
+  hash.
+* The **decision thresholds are written into the script** before the numbers
+  are known — `MIN_ADAPTIVE_MARGIN`, `ABLATION_KILL_FRACTION`,
+  `ORACLE_SATURATION_FRACTION`.
+* The **train/dev/test seeds are fixed in `splits.py`**, and test is touched
+  once.
+* A coefficient may be revised **only for a realism defect statable without
+  reference to which arm it favours** — and then the model version is bumped
+  and everything reruns, with the superseded run kept in the record.
+
+That last clause has already been exercised once. Model v1.0.0 failed, and
+tracing why showed the strategic environment moved the score by 1.14 points
+across its entire range, exclusively through crisis hazard, while
+`partner_alignment` affected nothing at all. The defect statement — *a model in
+which alliance capability does not depend on ally commitment is not modelling
+alliances* — makes no reference to adaptivity and would be just as damning if
+the fix made adaptivity look worse. Hence v1.1.0. **v1.0.0's failing numbers are
+retained**, not discarded.
+
+### The comparator that actually matters
+
+**Not adaptive versus constant.** A review made the point that would otherwise
+have invalidated the headline: an "adaptive" policy can beat a constant one
+merely by *varying over time*, without reading a single observation. So the
+ladder runs
+
+| class | varies over time? | reads observations? | parameters |
+|---|---|---|---|
+| `constant` | no | no | 21 |
+| **`open_loop`** | **yes** | **no** | **105** |
+| `linear_feedback` | yes | **yes** | **105** |
+| `oracle_open_loop` | yes | no, but knows the world | 105 per world |
+
+**The headline statistic is the paired held-out difference between
+`linear_feedback` and `open_loop`.** The two carry identical parameter counts so
+capacity is not a confound, and each class is warm-started from the fitted
+solution of the simpler one so that optimisation difficulty is not one either —
+a first smoke run showed exactly that pathology, with `open_loop` scoring below
+a policy whose observations had been frozen.
+
+`oracle_open_loop` bounds the whole question: it never reads an observation, it
+simply already knows which world it is in. The gap between it and `open_loop` is
+the total value of knowing the world; the gap between `linear_feedback` and
+`open_loop` is how much of that inference actually recovers.
+
+### Preregistered decision rule
+
+Proceed to the LLM search only if **all** hold on the test bank:
+
+| | |
+|---|---|
+| **P1** | `linear_feedback` beats `open_loop`, paired 95% CI excluding zero, by ≥ `MIN_ADAPTIVE_MARGIN` |
+| **P2** | the margin holds across every structural form, not just pooled |
+| **P3** | shuffling observations destroys it (falls below half) |
+| **P4** | freezing observations destroys it |
+| **P5** | `linear_feedback` does not already reach the oracle ceiling |
+
+P3 and P4 are review point 6: an advantage that survives having its
+observations scrambled was never about the observations.
+
+Any failure is **reported as a falsification**, not tuned away. It costs
+nothing, and it is the step most likely to be skipped under deadline pressure,
+which is why it has its own section.
 
 ---
 
