@@ -152,6 +152,28 @@ def validity_gate(
             f"and to non-negative shares"
         )
 
+    # -- policy coherence -------------------------------------------------
+    # Only for portfolios DERIVED from instrument decisions. A review of
+    # 2026-08-18 was right that the gate proved formatting and not coherence,
+    # and right that this was foundational: an allocation over Lowy OUTCOMES
+    # cannot be fiscally infeasible, because outcomes have no price. Once the
+    # searched layer is the instruments, it can be, and here it is.
+    #
+    # Envelopes are calibrated so Japan's actual December 2022 decision comes
+    # out feasible (it happened) and stretched (it nearly broke the government
+    # that did it). Contradictory pairs and constitutional prerequisites are
+    # WARNINGS, not violations: pulling in two directions is a real strategic
+    # posture and the archive should be able to hold it. Pricing it is the
+    # judge's job, not the gate's.
+    if getattr(portfolio, "instruments", None):
+        try:
+            from instruments import coherence_report
+        except ImportError:          # instruments module absent: skip, do not crash
+            coherence_report = None
+        if coherence_report is not None:
+            report = coherence_report({"instruments": portfolio.instruments})
+            reasons.extend(report.violations)
+
     # -- sequence ---------------------------------------------------------
     phases = portfolio.phases
     if len(phases) < limits.min_phases:

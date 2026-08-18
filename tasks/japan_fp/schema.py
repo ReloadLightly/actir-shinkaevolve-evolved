@@ -198,6 +198,12 @@ class PolicyPortfolio:
         #: Raw sum before any repair, and whether repair actually fired.
         self.raw_share_sum: Optional[float] = None
         self.shares_repaired: bool = False
+        #: The instrument decisions this allocation was DERIVED from, when it
+        #: was. Empty for a portfolio whose dials were chosen directly, which
+        #: is the older representation. Carried into to_dict() so the validity
+        #: gate can test fiscal and political feasibility -- impossible for an
+        #: allocation over outcomes, because outcomes have no price.
+        self.instruments: Dict[str, float] = {}
 
     # -- construction API used inside the EVOLVE-BLOCK ---------------------
 
@@ -409,7 +415,7 @@ class PolicyPortfolio:
         """
         ordered_ids = [d for d in DIALS if d in self._dials]
         ordered_ids += sorted(d for d in self._dials if d not in DIALS)
-        return {
+        payload: Dict[str, Any] = {
             "horizon": list(self.horizon),
             "dials": [
                 {
@@ -440,6 +446,16 @@ class PolicyPortfolio:
                 for year, value in sorted(self._defence_path.items())
             },
         }
+        # Only present when the allocation was DERIVED from instrument
+        # decisions. Omitted otherwise so the cache key of an older-style
+        # portfolio is byte-identical to what it was before this field existed
+        # -- adding a key unconditionally would invalidate every cached judge
+        # call in the repository and silently re-spend the ledger.
+        if self.instruments:
+            payload["instruments"] = {
+                k: round(float(v), 6) for k, v in sorted(self.instruments.items())
+            }
+        return payload
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return (
