@@ -40,6 +40,12 @@ The program's EVOLVE-BLOCK builds a PolicyPortfolio: an allocation of Japan's ma
 
 Fitness is Japan's projected Lowy composite in 2030, averaged over three fixed scenarios: a grinding status quo, a Taiwan contingency, and US retrenchment. The 2025 baseline composite is 38.8, so that is the number to beat.
 
+Hard limits, checked for free before any scoring happens. A portfolio breaking one of these is thrown away and its generation is wasted, so read them once:
+
+* **The 30 dial names are fixed.** They are the Lowy Index's own submeasures and no others exist. Anywhere a dial is named - including a phase's focus list - it must be one of the 30 already in the program. The 2026-08-18 preflight had a model invent `military_capability.nuclear_deterrence`, which is a real policy idea and not a Lowy submeasure; that portfolio was discarded whole. If you want to propose something the 30 dials cannot express, that is exactly what `custom_initiatives` is for.
+* **defence_spending_path must stay within 0.5 and 3.5 per cent of GDP**, every year. The same preflight had a model propose 7.0%, which is not a Japanese defence budget under any government. 3.5 is already far beyond the 2022 decision.
+* Phases must be ordered and lie inside 2026-2030; every dial carrying effort needs a non-empty `how` under 240 characters; every custom initiative must name the submeasures it targets.
+
 What actually moves the score:
 
 1. Shares are proportions of one finite budget of effort, and are normalised for you - so do not spend effort on arithmetic, spend it on the allocation. What matters is the trade-off: raising one dial must lower others, because there is no more effort to be had.

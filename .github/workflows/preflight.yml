@@ -41,10 +41,20 @@ on:
         default: true
         type: boolean
       mutation:
-        description: "Can the ensemble produce a valid portfolio — 2 calls, ~$0.036"
+        description: "Can the ensemble produce a valid portfolio"
         required: true
         default: true
         type: boolean
+      mutation_models:
+        description: "Comma-separated mutation models. Both tiers separates a prompt problem from a model-tier one."
+        required: false
+        default: "gpt-4.1-nano,gpt-4.1"
+        type: string
+      mutation_repeats:
+        description: "Attempts per model. 1 is a binary that cannot tell 0% from 30%; 3 gives a rate. 2 models x 3 ~ $0.11"
+        required: false
+        default: "3"
+        type: string
 
 permissions:
   contents: read
@@ -97,13 +107,17 @@ jobs:
             echo '```'
             python scripts/preflight_probes.py --estimate --probe all
             echo
-            python scripts/mutation_smoke.py --estimate
+            python scripts/mutation_smoke.py --estimate \
+            --models "${{ inputs.mutation_models }}" \
+            --repeats "${{ inputs.mutation_repeats }}"
             echo
             python scripts/m1_calibration.py --estimate --only accommodation
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           python scripts/preflight_probes.py --estimate --probe all
-          python scripts/mutation_smoke.py --estimate
+          python scripts/mutation_smoke.py --estimate \
+            --models "${{ inputs.mutation_models }}" \
+            --repeats "${{ inputs.mutation_repeats }}"
 
       - name: Gate on typed confirmation
         id: gate
@@ -170,7 +184,9 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -o pipefail
-          python scripts/mutation_smoke.py --run 2>&1 | tee mut.txt
+          python scripts/mutation_smoke.py --run \
+            --models "${{ inputs.mutation_models }}" \
+            --repeats "${{ inputs.mutation_repeats }}" 2>&1 | tee mut.txt
           { echo "## Mutation ensemble"; echo '```'; cat mut.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Total spend

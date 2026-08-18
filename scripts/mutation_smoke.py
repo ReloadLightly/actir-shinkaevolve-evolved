@@ -69,12 +69,16 @@ Hard requirements, all checked by an automatic validity gate before your work is
 scored:
 
 1. The 30 `share` values are proportions of one finite effort budget and are normalised automatically, so their absolute sum does not matter - but the trade-off does: raising one dial must come at the expense of others.
-2. Use only the dial names already present. They are the Lowy Index's own 30 \
-submeasures and no others exist.
+2. Use ONLY the 30 dial names already present. They are the Lowy Index's own \
+submeasures and no others exist. This applies everywhere a dial is named, \
+INCLUDING a phase's `focus` list. To propose something the 30 dials cannot \
+express, use `custom_initiatives` - that is what the slot is for.
 3. Every dial with a share above 0 needs a non-empty `how` string of at most \
 240 characters.
 4. Phases must be ordered and lie inside 2026-2030.
-5. `defence_spending_path` values must lie between 0.5 and 3.5.
+5. EVERY value in `defence_spending_path` must lie between 0.5 and 3.5 per cent \
+of GDP. 3.5 is already far beyond Japan's 2022 decision; anything above it is \
+not a defence budget any government would table.
 6. Every custom initiative must name the submeasures it targets.
 
 Return ONLY the Python code of the replacement block, starting with \
@@ -180,24 +184,37 @@ def _evaluate_reply(reply_text: str) -> Dict[str, Any]:
     return outcome
 
 
-def estimate(models: List[str]) -> None:
-    print(f"Mutation smoke test: {len(models)} models, 1 call each")
+def estimate(models: List[str], repeats: int = 1) -> None:
+    repeats = max(1, int(repeats))
+    print(f"Mutation smoke test: {len(models)} models, {repeats} call(s) each")
     total = 0.0
     for model in models:
         rates = PRICING_USD_PER_MTOK.get(model)
         if rates is None:
             print(f"  {model:22} no price entry")
             continue
-        cost = (EST_IN * rates["input"] + EST_OUT * rates["output"]) / 1e6
+        cost = repeats * (EST_IN * rates["input"] + EST_OUT * rates["output"]) / 1e6
         total += cost
         print(f"  {model:22} ~${cost:.4f}  "
-              f"(~{EST_IN} in / ~{EST_OUT} out at ${rates['input']}/${rates['output']})")
+              f"(~{EST_IN} in / ~{EST_OUT} out at ${rates['input']}/${rates['output']}"
+              f"{f', x{repeats}' if repeats > 1 else ''})")
     print(f"  {'TOTAL':22} ~${total:.4f}")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", default="configs/pilot.yaml")
+    parser.add_argument(
+        "--repeats", type=int, default=1,
+        help="attempts per model. 1 gives a binary that cannot "
+             "distinguish 0%% from 30%%; the pilot decision needs a RATE, "
+             "so use 3 or more when it matters.")
+    parser.add_argument(
+        "--models", default=None,
+        help="comma-separated model override. Without it the config's "
+             "llm_models are used. Use this to ask whether a gate failure "
+             "is the prompt or the model tier -- the 2026-08-18 preflight "
+             "could not tell, because pilot.yaml declares one model.")
     parser.add_argument("--estimate", action="store_true")
     parser.add_argument("--run", action="store_true",
                         help="actually call the models. Without this, nothing is spent.")
@@ -207,13 +224,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = REPO_ROOT / config_path
-    models = _load_ensemble(config_path)
+    models = ([m.strip() for m in args.models.split(",") if m.strip()]
+              if args.models else _load_ensemble(config_path))
     if not models:
         print(f"{config_path} declares no llm_models", file=sys.stderr)
         return 2
 
     if args.estimate or not args.run:
-        estimate(models)
+        estimate(models, args.repeats)
         if not args.run:
             print("\nNothing was spent. Pass --run to make the calls.")
         return 0
@@ -224,25 +242,29 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     prompt = f"{INSTRUCTION}\n\n```python\n{_seed_block()}\n```\n"
 
+    repeats = max(1, int(args.repeats))
     results, spent = [], 0.0
     for model in models:
-        print(f"  mutating with {model} ...", flush=True)
-        try:
-            reply = _call_model(model, prompt)
-        except Exception as exc:                            # noqa: BLE001
-            print(f"    call FAILED: {type(exc).__name__}: {exc}")
-            results.append({"model": model, "call_failed": str(exc)})
-            continue
-        cost = _cost(model, reply)
-        spent += cost
-        outcome = _evaluate_reply(reply["text"])
-        outcome.update({
-            "model": model, "cost_usd": round(cost, 6),
-            "finish_reason": reply["finish_reason"],
-            "input_tokens": reply["input_tokens"],
-            "output_tokens": reply["output_tokens"],
-        })
-        results.append(outcome)
+        for attempt in range(repeats):
+            label = f"{model} ({attempt + 1}/{repeats})" if repeats > 1 else model
+            print(f"  mutating with {label} ...", flush=True)
+            try:
+                reply = _call_model(model, prompt)
+            except Exception as exc:                        # noqa: BLE001
+                print(f"    call FAILED: {type(exc).__name__}: {exc}")
+                results.append({"model": model, "attempt": attempt,
+                                "call_failed": str(exc)})
+                continue
+            cost = _cost(model, reply)
+            spent += cost
+            outcome = _evaluate_reply(reply["text"])
+            outcome.update({
+                "model": model, "attempt": attempt, "cost_usd": round(cost, 6),
+                "finish_reason": reply["finish_reason"],
+                "input_tokens": reply["input_tokens"],
+                "output_tokens": reply["output_tokens"],
+            })
+            results.append(outcome)
 
     print()
     print("| model                  | parsed | ran | gate | shares    | cost    |")
@@ -266,22 +288,35 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     usable = [r for r in results if r.get("valid")]
     print()
-    print(f"Spent ${spent:.4f}. {len(usable)}/{len(results)} models produced a "
+    print("Gate pass rate per model")
+    rates = {}
+    for model in models:
+        mine = [r for r in results if r["model"] == model]
+        ok = sum(1 for r in mine if r.get("valid"))
+        rate = ok / len(mine) if mine else 0.0
+        rates[model] = {"passed": ok, "attempts": len(mine), "rate": round(rate, 4)}
+        print(f"  {model:22} {ok}/{len(mine)}  ({rate:.0%})")
+    print()
+    print(f"Spent ${spent:.4f}. {len(usable)}/{len(results)} attempts produced a "
           f"portfolio the gate accepts.")
     if not usable:
         print("NONE of the configured mutation models can produce a valid "
               "individual. The pilot would spend its entire ceiling on gate "
               "rejections. Fix the ensemble or the task system message first.")
     elif len(usable) < len(results):
-        print("The ensemble is effectively smaller than configured: the UCB1 "
-              "bandit will learn to avoid whichever model keeps failing.")
+        print("Some attempts fail. In the real loop this is less fatal than it")
+        print("looks: ShinkaEvolve feeds the gate's reason string back to the")
+        print("model, so a rejection buys a corrected retry rather than nothing.")
+        print("The rate still sets how much of the budget goes to retries, and")
+        print("the UCB1 bandit will learn to avoid whichever model fails most.")
 
     out_dir = Path(args.out)
     if not out_dir.is_absolute():
         out_dir = REPO_ROOT / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "mutation_smoke.json").write_text(
-        json.dumps({"spent_usd": round(spent, 6), "results": results}, indent=2),
+        json.dumps({"spent_usd": round(spent, 6), "pass_rates": rates,
+                    "results": results}, indent=2),
         encoding="utf-8",
     )
     print(f"Wrote {out_dir / 'mutation_smoke.json'}")
